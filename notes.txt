@@ -1,0 +1,19 @@
+
+
+Make exchange to send orders for TPC
+Need python script to verify order is valid.
+Make c++ script for serialization (see python script)
+
+Client sends order that looks like this:
+
+
+Example TPCF
+O,MPID_A    ,TPCF1010,B,75,10,ORDERID001
+
+order_type: 1 byte
+mpid: 10 bytes
+ticker: 8 bytes
+side: 1 byte
+price: 4 bytes
+size: 4 bytes
+orderid: 10 bytes

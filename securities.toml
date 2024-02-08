@@ -1,0 +1,17 @@
+
+title = "Tradable Securities Contract Specifications"
+
+[securities]
+  [securities.TPCF]
+    ticker = 'TPCF'
+    lot = 100
+    decimals = 2
+    multiplier = 100
+    settlement = 'cash'
+  [securities.TPCF.arguments]
+    [securities.TPCF.arguments.buy_turn]
+      name = "buy_turn"
+      possible_values = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10']
+    [securities.TPCF.arguments.sell_turn]
+      name = "sell_turn"
+      possible_values = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10']
