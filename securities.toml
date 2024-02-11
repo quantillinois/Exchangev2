@@ -8,6 +8,8 @@ title = "Tradable Securities Contract Specifications"
     decimals = 2
     multiplier = 100
     settlement = 'cash'
+    max_price = 99999
+    min_price = 1
   [securities.TPCF.arguments]
     [securities.TPCF.arguments.buy_turn]
       name = "buy_turn"

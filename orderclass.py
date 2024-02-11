@@ -49,3 +49,37 @@ class CancelOrder:
   order_type: str
   mpid: str
   order_id: str
+
+  def serialize(self):
+    arr = bytearray()
+    arr.extend(self.order_type.encode(encoding='ascii'))
+
+    if len(self.mpid) > 10:
+      self.mpid = self.mpid[:10]
+    else:
+      self.mpid = self.mpid.ljust(10, ' ')
+    arr.extend(self.mpid.encode(encoding='ascii'))
+
+    if len(self.order_id) > 10:
+      raise ValueError("Order ID must be at most 10 characters long")
+    else:
+      self.order_id = self.order_id.ljust(10, ' ')
+    arr.extend(self.order_id.encode(encoding='ascii'))
+    return arr
+
+
+  def deserialize(self, arr: bytearray):
+    decoded_arr = arr.decode()
+    self.order_type = decoded_arr[0]
+    self.mpid = decoded_arr[1:11].strip()
+    self.order_id = decoded_arr[11:21].strip()
+
+@dataclass
+class TickerConfiguration:
+  symbol: str
+  max_price: int
+  min_price: int
+  lot_size: int
+  decimals: int
+  settlement: str
+  multiplier: int

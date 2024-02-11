@@ -1,11 +1,21 @@
 import unittest
-from matching_engine import OrderMatchingEngine, Timer, TradeIDGenerator, OrderBook
+from matching_engine import OrderMatchingEngine, Timer, TradeIDGenerator, OrderBook, TickerConfiguration
 from orderclass import OrderEntry, CancelOrder
 
 class TestMatchingEngine(unittest.TestCase):
   timer = Timer()
 
-  orderbooks = ["TPCF0101"]
+  orderbooks = [
+    TickerConfiguration(
+      symbol="TPCF0101",
+      max_price=99999,
+      min_price=1,
+      lot_size=100,
+      decimals=2,
+      settlement='cash',
+      multiplier=100
+    )
+  ]
 
 
   def test_insert_buy_order(self):
