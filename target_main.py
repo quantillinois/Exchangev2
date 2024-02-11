@@ -24,8 +24,8 @@ if __name__ == "__main__":
   init_orders = [
   OrderEntry("O", "MPID1", "TPCF0101", "B", 100, 100, str(orderid:=orderid+1).rjust(10, '0')),
   OrderEntry("O", "MPID1", "TPCF0101", "B", 100, 100, str(orderid:=orderid+1).rjust(10, '0')),
-  OrderEntry("O", "MPID1", "TPCF0101", "S", 100, 100, str(orderid:=orderid+1).rjust(10, '0')),
-  OrderEntry("O", "MPID1", "TPCF0101", "S", 101, 100, str(orderid:=orderid+1).rjust(10, '0')),
+  OrderEntry("O", "MPID2", "TPCF0101", "S", 100, 100, str(orderid:=orderid+1).rjust(10, '0')),
+  OrderEntry("O", "MPID2", "TPCF0101", "S", 101, 100, str(orderid:=orderid+1).rjust(10, '0')),
   OrderEntry("O", "MPID1", "TPCF0101", "B", 101, 50,  str(orderid:=orderid+1).rjust(10, '0')),
   ]
 
@@ -45,3 +45,17 @@ if __name__ == "__main__":
   for order in orders:
     me.process_order(order.serialize())
     print(me.orderbooks["TPCF0101"])
+
+  msgs = me.get_outbound_msgs("TPCF0101")
+
+
+  binary_format = False
+  if binary_format:
+    with open('trademsgs.out', 'wb') as f:
+      for msg in msgs:
+        f.write(msg.serialize())
+  else:
+    with open('trademsgs.out', 'w') as f:
+      for msg in msgs:
+        f.write(str(msg) + '\n')
+

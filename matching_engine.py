@@ -73,6 +73,29 @@ class TradeMessage:
   seller_order_id: str
   trade_id: str
 
+  def serialize(self):
+    arr = bytearray()
+    arr.extend(self.timestamp.to_bytes(8, 'big'))
+    arr.extend(self.price.to_bytes(4, 'big'))
+    arr.extend(self.volume.to_bytes(4, 'big'))
+    arr.extend(self.buyer_mpid.encode(encoding='ascii'))
+    arr.extend(self.buyer_order_id.encode(encoding='ascii'))
+    arr.extend(self.seller_mpid.encode(encoding='ascii'))
+    arr.extend(self.seller_order_id.encode(encoding='ascii'))
+    arr.extend(self.trade_id.encode(encoding='ascii'))
+    return arr
+
+
+  def deserialize(self, arr: bytearray):
+    self.timestamp = int.from_bytes(arr[0:8], 'big')
+    self.price = int.from_bytes(arr[8:12], 'big')
+    self.volume = int.from_bytes(arr[12:16], 'big')
+    self.buyer_mpid = arr[16:26].decode().strip()
+    self.buyer_order_id = arr[26:36].decode().strip()
+    self.seller_mpid = arr[36:46].decode().strip()
+    self.seller_order_id = arr[46:56].decode().strip()
+    self.trade_id = arr[56:66].decode().strip()
+
 
 @dataclass
 class PriceLevel:
@@ -377,3 +400,9 @@ class OrderMatchingEngine:
     ob.cancel_order(cancel_order.order_id)
     self.orderid_to_ticker_map[cancel_order.order_id] = None
     # print(f"Order {cancel_order.order_id} cancelled") # TODO: Log
+
+
+  def get_outbound_msgs(self, ticker: str) -> [TradeMessage]:
+    msg = self.orderbooks[ticker].outbound_msgs
+    self.orderbooks[ticker].outbound_msgs = []
+    return msg
