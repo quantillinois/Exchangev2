@@ -12,7 +12,7 @@ class Server:
 
         self.map_tokens_to_ids()
 
-        asyncio.run(self.run_server())
+        asyncio.create_task(self.run_server())
 
     async def handle(self, websocket, path):
         token = websocket.request_headers.get('Authorization', None)
@@ -24,9 +24,7 @@ class Server:
         userid = self.token_to_id_mapping[token]
 
         async for message in websocket:
-            print(f"<<<{userid}: {message}")
             response = self.respond(message, userid)
-            print(f">>>{userid}: {response}")
             await websocket.send(response)
 
     def map_tokens_to_ids(self):
@@ -43,6 +41,7 @@ class Server:
     async def run_server(self):
         async with websockets.serve(self.handle, self.host, self.port, ping_interval=None):
             await asyncio.Future()  # run forever
+
 
 
 if __name__ == "__main__":
