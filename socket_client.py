@@ -2,19 +2,40 @@ import asyncio
 import websockets
 
 
-async def send_and_receive():
+class Client:
     uri = "ws://localhost:8765"
-    token = input("token: ")
 
-    async with websockets.connect(uri, extra_headers={"Authorization": token}, ping_interval=None) as websocket:
-        print("Connected to the server.")
+    def __init__(self, token):
+        self.token = token
+        self.websocket = None
+        self.dict = {}
+        self.counter = 0
 
-        while True:
-            send = input("")
-            await websocket.send(send)
-            message = await websocket.recv()
-            print(f">>>{message}")
+    async def connect(self):
+        self.websocket = await websockets.connect(
+            self.uri, extra_headers={"Authorization": self.token}, ping_interval=None
+        )
+
+    async def send(self, message):
+        await self.websocket.send(message)
+        response = await self.websocket.recv()
+
+        return response
+
+    async def close(self):
+        await self.websocket.close()
+
+
+async def main():
+    client = Client("a")
+    await client.connect()
+
+    res = await client.send("ligma")
+
+    print(res)
+
+    await client.close()
 
 
 if __name__ == "__main__":
-    asyncio.run(send_and_receive())
+    asyncio.run(main())

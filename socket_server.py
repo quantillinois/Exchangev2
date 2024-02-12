@@ -1,42 +1,52 @@
 import asyncio
 import websockets
 
-token_to_id_mapping = {}
 
+class Server:
+    def __init__(self, respond, filename='tokens.txt', host='localhost', port=8765):
+        self.token_to_id_mapping = {}
+        self.filename = filename
+        self.host = host
+        self.port = port
+        self.respond = respond
 
-async def handle(websocket):
-    token = websocket.request_headers['Authorization'] if 'Authorization' in websocket.request_headers else None
+        self.map_tokens_to_ids()
 
-    if token is None or token not in token_to_id_mapping:
-        await websocket.send('Invalid token')
-        return
+        asyncio.run(self.run_server())
 
-    userid = token_to_id_mapping[token]
+    async def handle(self, websocket, path):
+        token = websocket.request_headers.get('Authorization', None)
 
-    async for message in websocket:
-        print(f"<<<{userid}: {message}")
-        greeting = f"Hello {userid}! {message}"
-        print(f">>>{userid}: {greeting}")
-        await websocket.send(greeting)
+        if token is None or token not in self.token_to_id_mapping:
+            await websocket.send('Invalid token')
+            return
 
+        userid = self.token_to_id_mapping[token]
 
-def map_tokens_to_ids(filename):
-    id_counter = 0
+        async for message in websocket:
+            print(f"<<<{userid}: {message}")
+            response = self.respond(message, userid)
+            print(f">>>{userid}: {response}")
+            await websocket.send(response)
 
-    with open(filename, 'r') as file:
-        for line in file:
-            token = line.strip()
+    def map_tokens_to_ids(self):
+        id_counter = 0
 
-            if token not in token_to_id_mapping:
-                token_to_id_mapping[token] = id_counter
-                id_counter += 1
+        with open(self.filename, 'r') as file:
+            for line in file:
+                token = line.strip()
 
+                if token not in self.token_to_id_mapping:
+                    self.token_to_id_mapping[token] = id_counter
+                    id_counter += 1
 
-async def main():
-    map_tokens_to_ids('tokens.txt')
-    async with websockets.serve(handle, "localhost", 8765, ping_interval=None):
-        await asyncio.Future()  # run forever
+    async def run_server(self):
+        async with websockets.serve(self.handle, self.host, self.port, ping_interval=None):
+            await asyncio.Future()  # run forever
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    def hi(message, userid):
+        return f"hi {userid}, message: {message}"
+
+    server = Server(hi)
