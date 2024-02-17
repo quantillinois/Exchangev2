@@ -17,3 +17,14 @@ side: 1 byte
 price: 4 bytes
 size: 4 bytes
 orderid: 10 bytes
+
+
+2/13:
+- Need to send order outbound OUCH
+- Need to detect wash trades
+
+
+Ports:
+8000 - Order to OME (Server)
+9000 - Order from OME (Publisher) <- honestly idk if this can be done through server or if publisher is the right move
+10000 - Market Feed from OME (Publisher)

@@ -1,3 +1,4 @@
 *.in
 *.out
 __pycache__
+scratch/
