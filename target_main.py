@@ -16,10 +16,6 @@ if __name__ == "__main__":
   )]
 
   orderid = 0
-  orderid_map = {}
-  def new_id(orderid: int) -> str:
-    orderid += 1
-    return str(orderid:=orderid+1).rjust(10, '0')
 
   init_orders = [
   OrderEntry("O", "MPID1", "TPCF0101", "B", 100, 100, str(orderid:=orderid+1).rjust(10, '0')),

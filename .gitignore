@@ -1,4 +1,4 @@
 *.in
 *.out
 __pycache__
-.idea
+scratch/

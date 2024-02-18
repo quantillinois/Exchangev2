@@ -1,6 +1,8 @@
 from orderclass import OrderEntry, CancelOrder, TickerConfiguration
 from sortedcontainers import SortedDict
 from dataclasses import dataclass
+import zmq
+import multiprocessing
 
 
 class Timer(object):
@@ -65,6 +67,7 @@ class Order:
 @dataclass
 class TradeMessage:
   timestamp: int
+  ticker:str
   price: int
   volume: int
   buyer_mpid: str
@@ -76,34 +79,34 @@ class TradeMessage:
   def serialize(self):
     arr = bytearray()
     arr.extend(self.timestamp.to_bytes(8, 'big'))
+    arr.extend(self.ticker.encode())
     arr.extend(self.price.to_bytes(4, 'big'))
     arr.extend(self.volume.to_bytes(4, 'big'))
-    arr.extend(self.buyer_mpid.encode(encoding='ascii'))
-    arr.extend(self.buyer_order_id.encode(encoding='ascii'))
-    arr.extend(self.seller_mpid.encode(encoding='ascii'))
-    arr.extend(self.seller_order_id.encode(encoding='ascii'))
-    arr.extend(self.trade_id.encode(encoding='ascii'))
+    arr.extend(self.buyer_mpid.encode())
+    arr.extend(self.buyer_order_id.encode())
+    arr.extend(self.seller_mpid.encode())
+    arr.extend(self.seller_order_id.encode())
+    arr.extend(self.trade_id.encode())
     return arr
 
 
   def deserialize(self, arr: bytearray):
     self.timestamp = int.from_bytes(arr[0:8], 'big')
-    self.price = int.from_bytes(arr[8:12], 'big')
-    self.volume = int.from_bytes(arr[12:16], 'big')
-    self.buyer_mpid = arr[16:26].decode().strip()
-    self.buyer_order_id = arr[26:36].decode().strip()
-    self.seller_mpid = arr[36:46].decode().strip()
-    self.seller_order_id = arr[46:56].decode().strip()
-    self.trade_id = arr[56:66].decode().strip()
+    self.ticker = arr[8:16].decode()
+    self.price = int.from_bytes(arr[16:20], 'big')
+    self.volume = int.from_bytes(arr[20:24], 'big')
+    self.buyer_mpid = arr[24:32].decode()
+    self.buyer_order_id = arr[32:42].decode()
+    self.seller_mpid = arr[42:50].decode()
 
 
 @dataclass
 class PriceLevel:
   price: int
-  bids: [Order]
+  bids: list[Order]
   bid_total_volume: int
   bid_total_orders: int
-  asks: [Order]
+  asks: list[Order]
   ask_total_volume: int
   ask_total_orders: int
 
@@ -354,7 +357,7 @@ class OrderBook:
 
 
 class OrderMatchingEngine:
-  def __init__(self, symbols: [TickerConfiguration], timer: Timer):
+  def __init__(self, symbols: list[TickerConfiguration], timer: Timer):
     self.timer = timer
 
     self.orderbooks = {}
@@ -362,6 +365,24 @@ class OrderMatchingEngine:
       self.orderbooks[symbol_config.symbol] = OrderBook(symbol_config, self.timer, TradeIDGenerator())
 
     self.orderid_to_ticker_map = {}
+    self.inbound_queue = []
+    self.outbound_queue = []
+
+    context = zmq.Context()
+    # Publisher for sending out
+    self.outbound_socket = context.socket(zmq.PUB)
+    self.outbound_socket.bind("tcp://*:8001") # TODO: Refactor
+    self.outbound_topic = "ENTRY-OME1"
+
+    # Server for receiving incoming orders
+    self.inbound_socket = context.socket(zmq.REP)
+    self.inbound_socket.bind("tcp://*:9001") # TODO: Refactor
+
+    # Publisher for sending market data
+    context = zmq.Context()
+    self.market_data_socket = context.socket(zmq.PUB)
+    self.market_data_socket.bind("tcp://*:10001") # TODO: Refactor
+    self.market_data_topic = "MDF-OME1"
 
 
   def process_order(self, order: bytearray):
@@ -402,7 +423,40 @@ class OrderMatchingEngine:
     # print(f"Order {cancel_order.order_id} cancelled") # TODO: Log
 
 
-  def get_outbound_msgs(self, ticker: str) -> [TradeMessage]:
+  def get_outbound_msgs(self, ticker: str) -> list[TradeMessage]:
     msg = self.orderbooks[ticker].outbound_msgs
     self.orderbooks[ticker].outbound_msgs = []
     return msg
+
+
+  def get_inbound_msgs(self):
+    # print("Scanning inbound messages") # TODO: Log
+    try:
+      message = self.inbound_socket.recv(flags=zmq.NOBLOCK)
+      print(f"Received message: {message}") # TODO: Log
+      self.inbound_queue.append(message)
+      self.inbound_socket.send(b"OK")
+    except zmq.error.Again:
+      pass
+
+
+  def send_outbound_msgs(self):
+    for msg in self.outbound_queue:
+      self.outbound_socket.send(msg)
+    self.outbound_queue = []
+
+
+
+if __name__ == "__main__":
+  timer = Timer()
+  ticker_config = TickerConfiguration("TPCF0101", 100, 200, 1, 2, "cash", 1)
+  matching_engine = OrderMatchingEngine([ticker_config], timer)
+
+  try:
+    while True:
+      matching_engine.get_inbound_msgs()
+      for ticker in matching_engine.orderbooks:
+        matching_engine.get_outbound_msgs(ticker)
+      matching_engine.send_outbound_msgs()
+  except KeyboardInterrupt:
+    print("Exiting")
