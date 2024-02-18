@@ -91,18 +91,21 @@ class TenPokerCardSampler(Sampler):
 
 
 class UnderlyingProcessGenerator:
-  def __init__(self, sampler: Sampler):
+  def __init__(self, sampler: Sampler, socket: int = 7000, delay : float = 1.0):
     self.sampler = sampler
+    self.delay = delay
 
     context = zmq.Context()
     self.socket = context.socket(zmq.PUB)
-    self.socket.bind("tcp://*:7001")
+    self.socket.bind(f"tcp://*:{socket}")
+    time.sleep(1)
 
   def next_turn(self):
     sample = self.sampler.sample()
     t = self.sampler.get_turn_num()
     r = self.sampler.get_round_num()
     tv = self.sampler.get_total_value()
+    print(f"{self.sampler.topic} {t},{r},{sample},{tv}")
     self.socket.send_string(f"{self.sampler.topic} {t},{r},{sample},{tv}") # Space is needed to separate topic from message
     return sample
 

@@ -1,7 +1,8 @@
-from matching_engine import OrderMatchingEngine
-from generator import UnderlyingProcessGenerator
+from matching_engine import OrderMatchingEngine, Timer
+from generator import UnderlyingProcessGenerator, TenPokerCardSampler
 from trading_bot import TradingBot
 from gateway import Gateway
+from orderclass import TickerConfiguration
 import multiprocessing
 
 
@@ -15,7 +16,28 @@ class NetworkTopicInfo:
 
 
 if __name__ == "__main__":
-  pass
+  timer = Timer()
+  ticker_config_list = [
+    TickerConfiguration("TPCF0101", 1300, 1, 4, 2, "cash", 1),
+    TickerConfiguration("TPCF0202", 2600, 2, 4, 2, "cash", 1),
+    TickerConfiguration("TPCF0303", 3900, 3, 4, 2, "cash", 1),
+    TickerConfiguration("TPCF0404", 5200, 4, 4, 2, "cash", 1),
+    TickerConfiguration("TPCF0505", 6400, 5, 4, 2, "cash", 1),
+    TickerConfiguration("TPCF0606", 7600, 6, 4, 2, "cash", 1)
+  ]
+
+  gen1 = UnderlyingProcessGenerator(sampler=TenPokerCardSampler(), socket=7000, delay=1)
+  gen2 = UnderlyingProcessGenerator(sampler=TenPokerCardSampler(), socket=7001, delay=1)
+
+
+  # Set up some other shit
+
+  gen1.start()
+  gen2.start()
+
+
+  gen1.join()
+  gen2.join()
 
 
 # import time
