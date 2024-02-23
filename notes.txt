@@ -22,9 +22,11 @@ orderid: 10 bytes
 2/13:
 - Need to send order outbound OUCH
 - Need to detect wash trades
-
+- Need to refactor TickerConfiguration and orderclass.py
 
 Ports:
-8000 - Order to OME (Server)
-9000 - Order from OME (Publisher) <- honestly idk if this can be done through server or if publisher is the right move
+2000 - Bot to GW
+7000 - Generator
+8000 - GW to OME (Server)
+9000 - OME to GW (Publisher) <- honestly idk if this can be done through server or if publisher is the right move
 10000 - Market Feed from OME (Publisher)

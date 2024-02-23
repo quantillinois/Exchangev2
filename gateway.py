@@ -15,7 +15,7 @@ class Gateway:
     self.start_port = start_port
     self.max_connections = max_connections
 
-    self.setup_new_connection()
+    self.setup_new_connection() # TODO: Add map from mpid to socket
 
 
   def connect_to_exchange(self):

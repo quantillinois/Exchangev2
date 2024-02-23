@@ -394,6 +394,7 @@ class OrderMatchingEngine:
     order_type = bytes(order[0:1])
     switch[order_type](order)
 
+
   def process_order_entry(self, order: bytearray):
     order_entry = OrderEntry("", "", "", "", 0, 0, "")
     order_entry.deserialize(order)
@@ -406,6 +407,7 @@ class OrderMatchingEngine:
     else:
       # print(f"Order {order.order_id} fully traded") # TODO: Log
       self.orderid_to_ticker_map[order.order_id] = None
+
 
   def process_cancel_order(self, order: bytearray):
     cancel_order = CancelOrder("", "", "")

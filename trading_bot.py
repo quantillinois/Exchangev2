@@ -33,7 +33,7 @@ class TradingBot:
           parts = line.split(',')
           order = OrderEntry(parts[0], self.name, parts[1], parts[2], int(parts[3]), int(parts[4]), parts[5])
           self.outbound_msgs.append(order)
-        elif line.startswith("X"):
+        elif line.startswith("C"):
           parts = line.split(',')
           cancel = CancelOrder(parts[0], self.name, parts[1])
           self.outbound_msgs.append(cancel)
@@ -86,7 +86,7 @@ class TradingBot:
 
 
 if __name__ == "__main__":
-  bot = TradingBot("Bot1", "orders.txt", "tcp://localhost:2000")
+  bot = TradingBot("Bot1", "orders.txt", "tcp://192.168.56.10:2000")
 
   try:
     while True:
