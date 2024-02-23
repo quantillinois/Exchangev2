@@ -1,6 +1,8 @@
 import unittest
+
 from matching_engine import OrderBook, Timer, TradeIDGenerator, Order
 from orderclass import TickerConfiguration
+
 
 class TestOrderbookCancel(unittest.TestCase):
   TPCF0101_CONFIG = TickerConfiguration(

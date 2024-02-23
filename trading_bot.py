@@ -1,8 +1,10 @@
-import zmq
-from orderclass import OrderEntry, CancelOrder
-import multiprocessing
-import time
 import sys
+import time
+
+import zmq
+
+from orderclass import OrderEntry, CancelOrder
+
 
 class TradingBot:
   def __init__(self, name: str, order_file: str, gateway_network_hostname: str):

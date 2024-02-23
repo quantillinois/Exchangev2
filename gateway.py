@@ -1,7 +1,9 @@
 # Handles specific PAIR interaction,
 # subscribed to exchange outbound msgs
-import zmq
 import time
+
+import zmq
+
 
 class Gateway:
 

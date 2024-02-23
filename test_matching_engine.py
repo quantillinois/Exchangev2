@@ -1,6 +1,8 @@
 import unittest
-from matching_engine import OrderMatchingEngine, Timer, TradeIDGenerator, OrderBook, TickerConfiguration
-from orderclass import OrderEntry, CancelOrder
+
+from matching_engine import OrderMatchingEngine, Timer, TickerConfiguration
+from orderclass import OrderEntry
+
 
 class TestMatchingEngine(unittest.TestCase):
   timer = Timer()

@@ -1,14 +1,19 @@
-from enum import Enum
 import random
+import time
+from enum import IntEnum
+from multiprocessing import Process
+
 import zmq
 
-class CardSuit(Enum):
+
+class CardSuit(IntEnum):
   HEARTS = 1
   DIAMONDS = 2
   CLUBS = 3
   SPADES = 4
 
-class CardValue(Enum):
+
+class CardValue(IntEnum):
   ACE = 1
   TWO = 2
   THREE = 3
@@ -89,9 +94,47 @@ class TenPokerCardSampler(Sampler):
     self.sampled_cards = []
     self.total_value = 0
 
+  def __getstate__(self):
+    self_dict = self.__dict__.copy()
+
+    return self_dict
+
+
+def generate_data(sampler, socket, delay):
+  context = zmq.Context()
+  socket_instance = context.socket(zmq.PUB)
+  socket_instance.bind(f"tcp://*:{socket}")
+
+  while True:
+    sample = sampler.sample()
+    t = sampler.get_turn_num()
+    r = sampler.get_round_num()
+    tv = sampler.get_total_value()
+    print(f"{sampler.topic} {t},{r},{sample},{tv}")
+    socket_instance.send_string(f"{sampler.topic} {t},{r},{sample},{tv}")
+    time.sleep(delay)
+
+
+class UnderlyingMultiProcessGenerator:
+  def __init__(self, samplers, sockets, delays):
+    self.samplers = samplers
+    self.sockets = sockets
+    self.delays = delays
+    self.processes = []
+
+  def start_generators(self):
+    for sampler, socket, delay in zip(self.samplers, self.sockets, self.delays):
+      process = Process(target=generate_data, args=(sampler, socket, delay))
+      process.start()
+      self.processes.append(process)
+
+  def stop_generators(self):
+    for process in self.processes:
+      process.terminate()
+
 
 class UnderlyingProcessGenerator:
-  def __init__(self, sampler: Sampler, socket: int = 7000, delay : float = 1.0):
+  def __init__(self, sampler: Sampler, socket: int = 7000, delay: float = 1.0):
     self.sampler = sampler
     self.delay = delay
 
@@ -106,23 +149,15 @@ class UnderlyingProcessGenerator:
     r = self.sampler.get_round_num()
     tv = self.sampler.get_total_value()
     print(f"{self.sampler.topic} {t},{r},{sample},{tv}")
-    self.socket.send_string(f"{self.sampler.topic} {t},{r},{sample},{tv}") # Space is needed to separate topic from message
+    self.socket.send_string(
+      f"{self.sampler.topic} {t},{r},{sample},{tv}")  # Space is needed to separate topic from message
     return sample
 
 
 if __name__ == "__main__":
-  import time
-  sampler = TenPokerCardSampler()
-  generator = UnderlyingProcessGenerator(sampler)
+  sockets = [7000, 8000, 9000]  # Example sockets
+  delays = [1.0, 2.0, 3.0]  # Example delays
+  samplers = [TenPokerCardSampler(), TenPokerCardSampler(), TenPokerCardSampler()]
 
-  try:
-    r = generator.sampler.get_round_num()
-    while r < 1:
-      card = generator.next_turn()
-      t = generator.sampler.get_turn_num()
-      print(f"Generated card (T: {t}, R: {r}): {card}")
-      print(f"Total Value: {generator.sampler.get_total_value()}")
-      r = generator.sampler.get_round_num()
-      time.sleep(1)
-  except KeyboardInterrupt:
-    print("Exiting")
+  generator = UnderlyingMultiProcessGenerator(samplers, sockets, delays)
+  generator.start_generators()

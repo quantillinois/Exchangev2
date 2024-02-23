@@ -1,7 +1,7 @@
-import zmq
-import random
 import sys
 import time
+
+import zmq
 
 port = "2000"
 context = zmq.Context()

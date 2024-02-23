@@ -1,8 +1,8 @@
-from orderclass import OrderEntry, CancelOrder, TickerConfiguration
-from sortedcontainers import SortedDict
 from dataclasses import dataclass
+
 import zmq
-import multiprocessing
+
+from orderclass import OrderEntry, CancelOrder, TickerConfiguration
 
 
 class Timer(object):

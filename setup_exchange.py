@@ -1,9 +1,6 @@
-from matching_engine import OrderMatchingEngine, Timer
 from generator import UnderlyingProcessGenerator, TenPokerCardSampler
-from trading_bot import TradingBot
-from gateway import Gateway
+from matching_engine import Timer
 from orderclass import TickerConfiguration
-import multiprocessing
 
 
 class NetworkTopicInfo:
