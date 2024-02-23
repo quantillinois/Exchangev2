@@ -1,0 +1,32 @@
+title = "Exchange Settings"
+
+[generators]
+  min_socket = 7000
+  max_socket = 7999
+  [[generators.sampler]]
+    name = "TPC"
+    topic = "TPC"
+    sampler = "TenPokerCardSampler"
+    delay_ms = 1000
+
+[gateways]
+  num_gateways = 2
+  start_port = 2000
+  max_connections = 10
+  max_port = 2999
+
+  [[gateways.specials]]
+
+
+[[tickerplant]]
+  name = "tickerplant_1"
+  topics = ["tpc_settlement", "bbo", "bbo_5", "market_data_feed"]
+  port = 12000
+  # Needs to automatically subscribe to all matching engines
+
+[[matching_engine]]
+  name = "ome_1"
+  tickers = ["TPCF"]
+
+
+
