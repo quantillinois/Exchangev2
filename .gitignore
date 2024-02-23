@@ -2,3 +2,7 @@
 *.out
 __pycache__
 scratch/
+.vagrant
+build/
+*-venv/
+venv
