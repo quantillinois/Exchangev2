@@ -77,8 +77,8 @@ class CancelOrder:
 @dataclass
 class TickerConfiguration:
   symbol: str
-  max_price: int
   min_price: int
+  max_price: int
   lot_size: int
   decimals: int
   settlement: str
