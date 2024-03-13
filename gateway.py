@@ -5,7 +5,7 @@ import time
 
 class Gateway:
 
-  def __init__(self,  start_port: int = 2000, max_connections: int = 2): # TODO: Add exchange_settings which takes in info about all OMEs
+  def __init__(self,  start_port: int = 2000, max_connections: int = 10): # TODO: Add exchange_settings which takes in info about all OMEs
     # self.exchange_settings = "tcp://localhost:5555"`
     self.exchange_outbound_socket = None
     self.exchange_entry_socket = None
@@ -39,7 +39,7 @@ class Gateway:
 
 
   def setup_new_connection(self):
-    print("Setting up new connection")
+    print("Gateway connection: IP: localhost, Port: ", self.start_port) # TODO: Log
     context = zmq.Context()
     port = self.start_port
     while port < self.start_port + self.max_connections:
