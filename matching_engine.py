@@ -126,16 +126,22 @@ class PriceLevel:
 class PriceLevelList():
   def __init__(self, min_price: int, max_price: int, *args, **kwargs):
     self.price_level_list = [PriceLevel(price=price, bids=[], bid_total_volume=0, bid_total_orders=0, asks=[], ask_total_volume=0, ask_total_orders=0) for price in range(min_price, max_price+1)]
+    self.min_price = min_price
+    self.max_price = max_price
 
   def __getitem__(self, key):
-    if key < 1:
+    if key < self.min_price:
       raise ValueError("Price levels start at 1")
-    return self.price_level_list[key-1]
+    if key > self.max_price:
+      raise IndexError("Price level does not exist: " + str(key))
+    return self.price_level_list[key-self.min_price]
 
   def __setitem__(self, key, value):
-    if key < 1:
+    if key < self.min_price:
       raise ValueError("Price levels start at 1")
-    self.price_level_list[key-1] = value
+    if key > self.max_price:
+      raise IndexError("Price level does not exist: " + str(key))
+    self.price_level_list[key-self.min_price] = value
 
   def __delitem__(self, key):
     del self.price_level_list[key-1]
@@ -293,6 +299,7 @@ class OrderBook:
 
     return output_order
 
+
   def cancel_order(self, order_id: str):
     # TODO: Optimize O(n) to O(1)
     order = self.orderid_map.get(order_id, None)
@@ -392,6 +399,9 @@ class OrderMatchingEngine:
     }
 
     order_type = bytes(order[0:1])
+    if order_type not in switch:
+      self.process_invalid_entry(order)
+      return
     switch[order_type](order)
 
 
@@ -425,10 +435,18 @@ class OrderMatchingEngine:
     # print(f"Order {cancel_order.order_id} cancelled") # TODO: Log
 
 
+  def process_invalid_entry(self, order: bytearray):
+    print(f"Invalid: {order}") # TODO: Log
+
+
   def get_outbound_msgs(self, ticker: str) -> list[TradeMessage]:
-    msg = self.orderbooks[ticker].outbound_msgs
-    self.orderbooks[ticker].outbound_msgs = []
-    return msg
+    ob = self.orderbooks[ticker]
+    for msg in ob.outbound_msgs:
+      self.outbound_queue.append(msg.serialize())
+    ob.outbound_msgs = []
+
+    # Send market data
+    self.market_data_socket.send_multipart([self.market_data_topic.encode(), str(ob).encode()])
 
 
   def get_inbound_msgs(self):
