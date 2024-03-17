@@ -1,4 +1,4 @@
-from orderclass import OrderEntry, CancelOrder, TickerConfiguration
+from orderclass import *
 from sortedcontainers import SortedDict
 from dataclasses import dataclass
 import zmq
@@ -131,14 +131,14 @@ class PriceLevelList():
 
   def __getitem__(self, key):
     if key < self.min_price:
-      raise ValueError("Price levels start at 1")
+      raise ValueError(f"Price levels start at {self.min_price}")
     if key > self.max_price:
       raise IndexError("Price level does not exist: " + str(key))
     return self.price_level_list[key-self.min_price]
 
   def __setitem__(self, key, value):
     if key < self.min_price:
-      raise ValueError("Price levels start at 1")
+      raise ValueError(f"Price levels start at {self.min_price}")
     if key > self.max_price:
       raise IndexError("Price level does not exist: " + str(key))
     self.price_level_list[key-self.min_price] = value
@@ -165,7 +165,7 @@ class OrderBook:
     self.symbol = ticker_configuration.symbol
     self.timer = timer
     self.trade_id_generator = trade_id_generator
-    self.outbound_msgs = []
+    self.outbound_trade_msgs = []
     self.max_price: int = ticker_configuration.max_price
     self.min_price: int = ticker_configuration.min_price
     self.best_bid: int = self.min_price
@@ -178,8 +178,46 @@ class OrderBook:
     self.total_bid_volume = 0
     self.total_ask_volume = 0
 
-  def add_order(self, order: Order) -> Order:
-    output_order = None
+  def ouch_outbound_msg_from_trade(self, trade: TradeMessage) -> list[OrderExecutedOutbound]:
+    order_executed_outbound_msgs = []
+    order_executed_outbound_msgs.append(OrderExecutedOutbound(
+      order_type="E",
+      mpid=trade.buyer_mpid,
+      order_id=trade.buyer_order_id,
+      timestamp=trade.timestamp,
+      ticker=trade.ticker,
+      buyer_mpid=trade.buyer_mpid,
+      seller_mpid=trade.seller_mpid,
+      trade_id=trade.trade_id,
+      price=trade.price,
+      size=trade.volume
+    ))
+    order_executed_outbound_msgs.append(OrderExecutedOutbound(
+      order_type="E",
+      mpid=trade.seller_mpid,
+      order_id=trade.seller_order_id,
+      timestamp=trade.timestamp,
+      ticker=trade.ticker,
+      buyer_mpid=trade.buyer_mpid,
+      seller_mpid=trade.seller_mpid,
+      trade_id=trade.trade_id,
+      price=trade.price,
+      size=trade.volume
+    ))
+    return order_executed_outbound_msgs
+
+
+  def add_order(self, order: Order) -> tuple[Order, list[OrderExecutedOutbound]]:
+    """Add order to orderbook and execute trades if possible. Return leftover order and outbound messages.
+
+    Args:
+      order (Order): Order to add to orderbook
+
+    Returns:
+      A tuple containing the leftover order and a list of outbound messages to be sent to the clients.
+    """
+    order_executed_outbound_msgs = []
+    leftover_order = None
     if order.side == Side.BUY:
       while order.price >= self.best_ask and order.volume > 0: # Iterate through price levels
         while self.orderbook[self.best_ask].ask_total_orders > 0: # Iterate through orders at price level
@@ -190,6 +228,7 @@ class OrderBook:
           if order.volume >= resting_ask_order.volume: # Found trade, incoming volume greater
             trade_msg = TradeMessage(
               timestamp=self.timer.get_time(),
+              ticker=self.symbol,
               price=self.best_ask,
               volume=resting_ask_order.volume,
               buyer_mpid=order.mpid,
@@ -198,7 +237,9 @@ class OrderBook:
               seller_order_id=resting_ask_order.mpid_orderid,
               trade_id=self.trade_id_generator.generate_trade_id()
             )
-            self.outbound_msgs.append(trade_msg)
+            self.outbound_trade_msgs.append(trade_msg)
+            order_executed_outbound_msgs.extend(self.ouch_outbound_msg_from_trade(trade_msg))
+
             order.volume -= resting_ask_order.volume
             self.orderbook[self.best_ask].ask_total_volume -= resting_ask_order.volume
             self.orderbook[self.best_ask].ask_total_orders -= 1
@@ -210,6 +251,7 @@ class OrderBook:
           else:
             trade_msg = TradeMessage(
               timestamp=self.timer.get_time(),
+              ticker=self.symbol,
               price=self.best_ask,
               volume=order.volume,
               buyer_mpid=order.mpid,
@@ -218,7 +260,9 @@ class OrderBook:
               seller_order_id=resting_ask_order.mpid_orderid,
               trade_id=self.trade_id_generator.generate_trade_id()
             )
-            self.outbound_msgs.append(trade_msg)
+            self.outbound_trade_msgs.append(trade_msg)
+            order_executed_outbound_msgs.extend(self.ouch_outbound_msg_from_trade(trade_msg))
+
             resting_ask_order.volume -= order.volume
             self.orderbook[self.best_ask].ask_total_volume -= order.volume
             order.volume = 0
@@ -234,7 +278,7 @@ class OrderBook:
         self.orderid_map[order.order_id] = order
         if order.price > self.best_bid:
           self.best_bid = order.price
-        output_order = order
+        leftover_order = order
 
     elif order.side == Side.SELL:
       while order.price <= self.best_bid and order.volume > 0:
@@ -246,6 +290,7 @@ class OrderBook:
           if order.volume >= resting_bid_order.volume:
             trade_msg = TradeMessage(
               timestamp=self.timer.get_time(),
+              ticker=self.symbol,
               price=self.best_bid,
               volume=resting_bid_order.volume,
               buyer_mpid=resting_bid_order.mpid,
@@ -254,7 +299,9 @@ class OrderBook:
               seller_order_id=order.mpid_orderid,
               trade_id=self.trade_id_generator.generate_trade_id()
             )
-            self.outbound_msgs.append(trade_msg)
+            self.outbound_trade_msgs.append(trade_msg)
+            order_executed_outbound_msgs.extend(self.ouch_outbound_msg_from_trade(trade_msg))
+
             order.volume -= resting_bid_order.volume
             self.orderbook[self.best_bid].bid_total_volume -= resting_bid_order.volume
             self.orderbook[self.best_bid].bid_total_orders -= 1
@@ -266,6 +313,7 @@ class OrderBook:
           else:
             trade_msg = TradeMessage(
               timestamp=self.timer.get_time(),
+              ticker=self.symbol,
               price=self.best_bid,
               volume=order.volume,
               buyer_mpid=resting_bid_order.mpid,
@@ -274,7 +322,9 @@ class OrderBook:
               seller_order_id=order.mpid_orderid,
               trade_id=self.trade_id_generator.generate_trade_id()
             )
-            self.outbound_msgs.append(trade_msg)
+            self.outbound_trade_msgs.append(trade_msg)
+            order_executed_outbound_msgs.extend(self.ouch_outbound_msg_from_trade(trade_msg))
+
             resting_bid_order.volume -= order.volume
             self.orderbook[self.best_bid].bid_total_volume -= order.volume
             order.volume = 0
@@ -289,7 +339,7 @@ class OrderBook:
         self.orderid_map[order.order_id] = order
         if order.price < self.best_ask:
           self.best_ask = order.price
-        output_order = order
+        leftover_order = order
 
     if self.total_ask_orders == 0:
       self.best_ask = self.max_price
@@ -297,10 +347,10 @@ class OrderBook:
     if self.total_bid_orders == 0:
       self.best_bid = self.min_price
 
-    return output_order
+    return (leftover_order, order_executed_outbound_msgs)
 
 
-  def cancel_order(self, order_id: str):
+  def cancel_order(self, order_id: str) -> tuple[Order, list[OrderCanceledOutbound]]:
     # TODO: Optimize O(n) to O(1)
     order = self.orderid_map.get(order_id, None)
     if order is None:
@@ -327,6 +377,17 @@ class OrderBook:
       while self.orderbook[self.best_ask].ask_total_orders == 0 and self.best_ask < self.max_price:
         self.best_ask += 1
 
+    order_canceled_outbound_msgs = \
+    OrderCanceledOutbound(
+      order_type="C",
+      mpid=order.mpid,
+      order_id=order.order_id,
+      ticker=order.symbol,
+      timestamp=self.timer.get_time(),
+      decremented_shares=order.volume,
+      reason="U"
+    )
+    return (order, [order_canceled_outbound_msgs])
 
   def modify_order(self, order_id, new_order):
     # TODO: Implement
@@ -372,8 +433,9 @@ class OrderMatchingEngine:
       self.orderbooks[symbol_config.symbol] = OrderBook(symbol_config, self.timer, TradeIDGenerator())
 
     self.orderid_to_ticker_map = {}
-    self.inbound_queue = []
-    self.outbound_queue = []
+    self.ouch_inbound_queue = []
+    self.ouch_outbound_queue = []
+    self.mdf_outbound_queue = []
 
     context = zmq.Context()
     # Publisher for sending out
@@ -382,7 +444,7 @@ class OrderMatchingEngine:
     self.outbound_topic = "ENTRY-OME1"
 
     # Server for receiving incoming orders
-    self.inbound_socket = context.socket(zmq.REP)
+    self.inbound_socket = context.socket(zmq.PULL)
     self.inbound_socket.bind("tcp://*:9001") # TODO: Refactor
 
     # Publisher for sending market data
@@ -392,91 +454,124 @@ class OrderMatchingEngine:
     self.market_data_topic = "MDF-OME1"
 
 
-  def process_order(self, order: bytearray):
+  def run(self):
+    # Scan for incoming, write to orderbook
+    # orderbook process processes order
+    # send outbound messages
+    while True:
+      self.get_inbound_msgs_daemon()
+      # for ticker in self.orderbooks:
+      #   self.get_outbound_msgs(ticker)
+      self.send_outbound_msgs()
+
+  def process_order(self, order: bytearray) -> list[bytearray]:
     switch = {
       b'O': self.process_order_entry,
       b'C': self.process_cancel_order
     }
 
     order_type = bytes(order[0:1])
+    print(f"Processing order: {order_type}") # TODO: Log
     if order_type not in switch:
-      self.process_invalid_entry(order)
-      return
-    switch[order_type](order)
+      return self.process_invalid_entry(order, 'I')
+    return switch[order_type](order)
 
 
-  def process_order_entry(self, order: bytearray):
-    order_entry = OrderEntry("", "", "", "", 0, 0, "")
+  def process_order_entry(self, order: bytearray) -> list[bytearray]:
+    outbound_messages = []
+    order_entry = OrderEntry("", "", "", "", "", 0, 0)
     order_entry.deserialize(order)
+    # TODO: Check if order is valid?
+    accepted_order_outbound = OrderAcceptedOutbound("A", order_entry.mpid, order_entry.order_id, order_entry.ticker, self.timer.get_time(), order_entry.side, order_entry.price, order_entry.size)
     order = Order(order_entry.order_id, order_entry.ticker, order_entry.price, order_entry.size, order_entry.mpid, order_entry.order_id, self.timer.get_time(), order_entry.side)
     ob = self.orderbooks[order_entry.ticker]
-    output_order = ob.add_order(order)
-    if output_order is not None:
-      self.orderid_to_ticker_map[output_order.order_id] = order_entry.ticker
-      # print(f"Order {output_order.order_id} added to orderbook with volume {output_order.volume} at price {output_order.price}") # TODO: Log
+    leftover_order, trade_messages = ob.add_order(order)
+    if leftover_order is not None:
+      self.orderid_to_ticker_map[leftover_order.order_id] = order_entry.ticker
+      print(f"Order {leftover_order.order_id} added to orderbook with volume {leftover_order.volume} at price {leftover_order.price}") # TODO: Log
     else:
-      # print(f"Order {order.order_id} fully traded") # TODO: Log
+      print(f"Order {order.order_id} fully traded") # TODO: Log
       self.orderid_to_ticker_map[order.order_id] = None
 
+    outbound_messages.append(accepted_order_outbound.serialize())
+    outbound_messages.extend([trade.serialize() for trade in trade_messages])
+    return outbound_messages
 
-  def process_cancel_order(self, order: bytearray):
-    cancel_order = CancelOrder("", "", "")
+
+
+  def process_cancel_order(self, order: bytearray) -> list[bytearray]:
+    outbound_messages = []
+    cancel_order = CancelOrder("", "", "", "")
     cancel_order.deserialize(order)
     if cancel_order.order_id not in self.orderid_to_ticker_map:
       print(f"Order ID {cancel_order.order_id} not found")
-      return
+      return self.process_invalid_entry(order, 'N')
     ticker = self.orderid_to_ticker_map.get(cancel_order.order_id, None)
     if ticker is None:
       print(f"Order ID {cancel_order.order_id} has been completed previously")
-      return
+      return self.process_invalid_entry(order, 'C')
     ob = self.orderbooks[ticker]
-    ob.cancel_order(cancel_order.order_id)
+    canceled_order, messages = ob.cancel_order(cancel_order.order_id)
     self.orderid_to_ticker_map[cancel_order.order_id] = None
-    # print(f"Order {cancel_order.order_id} cancelled") # TODO: Log
+    print(f"Order {cancel_order.order_id} cancelled") # TODO: Log
+
+    for msg in messages:
+      outbound_messages.append(msg.serialize())
+    return outbound_messages
 
 
-  def process_invalid_entry(self, order: bytearray):
+  def process_invalid_entry(self, order: bytearray, reason: str) -> list[bytearray]:
     print(f"Invalid: {order}") # TODO: Log
+    reject_order = OrderRejectedOutbound(
+      order_type="J",
+      mpid=order[1:11].decode().strip(),
+      order_id=order[11:21].decode().strip(),
+      ticker=order[21:29].decode().strip(),
+      timestamp=self.timer.get_time(),
+      reason=reason
+    )
+    return [reject_order.serialize()]
+
 
 
   def get_outbound_msgs(self, ticker: str) -> list[TradeMessage]:
     ob = self.orderbooks[ticker]
-    for msg in ob.outbound_msgs:
-      self.outbound_queue.append(msg.serialize())
-    ob.outbound_msgs = []
+    # for msg in ob.outbound_msgs:
+    #   self.ouch_outbound_queue.append(msg.serialize())
+    # ob.outbound_msgs = []
 
     # Send market data
-    self.market_data_socket.send_multipart([self.market_data_topic.encode(), str(ob).encode()])
+    self.market_data_socket.send_multipart([self.market_data_topic.encode(), str(ob).encode()]) # Orderbook data
 
 
-  def get_inbound_msgs(self):
+  def get_inbound_msgs_daemon(self):
     # print("Scanning inbound messages") # TODO: Log
     try:
       message = self.inbound_socket.recv(flags=zmq.NOBLOCK)
       print(f"Received message: {message}") # TODO: Log
-      self.inbound_queue.append(message)
-      self.inbound_socket.send(b"OK")
+      outbound_messages = self.process_order(message)
+      self.ouch_outbound_queue.extend(outbound_messages)
     except zmq.error.Again:
       pass
 
 
   def send_outbound_msgs(self):
-    for msg in self.outbound_queue:
+    for msg in self.ouch_outbound_queue:
       self.outbound_socket.send(msg)
-    self.outbound_queue = []
+    self.ouch_outbound_queue = []
 
 
 
 if __name__ == "__main__":
   timer = Timer()
-  ticker_config = TickerConfiguration("TPCF0101", 100, 200, 1, 2, "cash", 1)
+  ticker_config = TickerConfiguration("TPCF1010", 1, 200, 1, 2, "cash", 1)
   matching_engine = OrderMatchingEngine([ticker_config], timer)
-
-  try:
-    while True:
-      matching_engine.get_inbound_msgs()
-      for ticker in matching_engine.orderbooks:
-        matching_engine.get_outbound_msgs(ticker)
-      matching_engine.send_outbound_msgs()
-  except KeyboardInterrupt:
-    print("Exiting")
+  matching_engine.run()
+  # try:
+  #   while True:
+  #     matching_engine.get_inbound_msgs_daemon()
+  #     for ticker in matching_engine.orderbooks:
+  #       matching_engine.get_outbound_msgs(ticker)
+  #     matching_engine.send_outbound_msgs()
+  # except KeyboardInterrupt:
+  #   print("Exiting")

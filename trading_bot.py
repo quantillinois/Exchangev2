@@ -31,17 +31,17 @@ class TradingBot:
         line = line.strip()
         if line.startswith("O"):
           parts = line.split(',')
-          order = OrderEntry(parts[0], self.name, parts[1], parts[2], int(parts[3]), int(parts[4]), parts[5])
+          order = OrderEntry(parts[0], self.name, parts[1], parts[2], parts[3], int(parts[4]), int(parts[5]))
           self.outbound_msgs.append(order)
         elif line.startswith("C"):
           parts = line.split(',')
-          cancel = CancelOrder(parts[0], self.name, parts[1])
+          cancel = CancelOrder(parts[0], self.name, parts[1], "")
           self.outbound_msgs.append(cancel)
 
 
   def establish_network_connections(self):
     context = zmq.Context()
-    self.gateway_socket = context.socket(zmq.PAIR)
+    self.gateway_socket = context.socket(zmq.PUSH)
     self.gateway_socket.connect(self.gateway_network_hostname)
 
     # self.market_data_socket = context.socket(zmq.SUB)
@@ -57,8 +57,8 @@ class TradingBot:
           self.gateway_socket.send(msg.serialize())
           print(f"Sent message: {msg}")
           self.outbound_msgs.pop(0)
-          ouch_msg = self.gateway_socket.recv()
-          print(f"Received message: {ouch_msg}") # TODO: make this a separate process
+          # ouch_msg = self.gateway_socket.recv()
+          # print(f"Received message: {ouch_msg}") # TODO: make this a separate process
           time.sleep(1) # TODO: Remove
     except KeyboardInterrupt:
       print("Exiting")
