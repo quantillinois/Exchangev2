@@ -55,15 +55,23 @@ class TradingBot:
       msg_type = msg[0]
       if msg_type == 87:
         print(f"Received W")
-      elif msg_type == 65:
+      elif msg_type == 65: # A
         # print(f"Received A")
         accept_order = OrderAcceptedOutbound("", "", "", "", 0, "", 0, 0)
         accept_order.deserialize(msg)
         print(accept_order)
-      elif msg_type == 69:
+      elif msg_type == 67: # C
+        cancel_order = OrderCanceledOutbound("", "", "", "", 0, 0, "")
+        cancel_order.deserialize(msg)
+        print(cancel_order)
+      elif msg_type == 69: # E
         executed_order = OrderExecutedOutbound("", "", "", "", 0, "", "", "", 0, 0)
         executed_order.deserialize(msg)
         print(executed_order)
+      elif msg_type == 74: # J
+        rejected_order = OrderRejectedOutbound("", "", "", "", 0, "")
+        rejected_order.deserialize(msg)
+        print(rejected_order)
       else:
         print(f"Received unknown message. Msg code: {msg_type}")
 
