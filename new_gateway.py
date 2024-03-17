@@ -72,6 +72,7 @@ class Gateway:
       except KeyboardInterrupt:
         print("Exiting")
         break
+      time.sleep(0.005)
 
   def read_from_exchange_daemon(self):
     context = zmq.Context()
@@ -92,6 +93,7 @@ class Gateway:
       except KeyboardInterrupt:
         print("Exiting")
         break
+      time.sleep(0.005)
 
 
   def run_client(self):
@@ -134,6 +136,7 @@ class Gateway:
           return
         if mpid is not None:
           msg_mpid = msg[1:11]
+          # print(f"Message received: {msg_mpid}, {msg}")
           if msg_mpid != mpid:
             return
           if msg[1:11] == mpid: # TODO: do not hardcode
@@ -155,6 +158,7 @@ class Gateway:
       except zmq.error.Again:
         pass
       process_outbound_message(port, connection)
+      time.sleep(0.005)
 
 
   # def send_order(self, arr: bytearray) -> bytearray:
@@ -175,6 +179,7 @@ class Gateway:
         continue
       for port, q in self.ouch_outbound_client_map.items():
         q.put(msg)
+      time.sleep(0.005)
 
 if __name__ == "__main__":
   gateway = Gateway()

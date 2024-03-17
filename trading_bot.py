@@ -65,6 +65,7 @@ class TradingBot:
         print(f"Received message: {ouch_msg}") # TODO: make this a separate process
       except zmq.error.Again:
         pass
+      # time.sleep(0.5)
 
 
   def scan_market_data(self):
