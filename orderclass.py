@@ -177,6 +177,16 @@ class OrderCanceledOutbound:
 
     return arr
 
+  def deserialize(self, msg: bytearray):
+    decoded_arr = msg.decode()
+    self.order_type = decoded_arr[0]
+    self.mpid = decoded_arr[1:11].strip()
+    self.order_id = decoded_arr[11:21].strip()
+    self.ticker = decoded_arr[21:29].strip()
+    self.timestamp = int.from_bytes(msg[29:37], 'big')
+    self.decremented_shares = int.from_bytes(msg[37:41], 'big')
+    self.reason = decoded_arr[41:42]
+
 @dataclass
 class OrderRejectedOutbound:
   order_type: str #J
@@ -210,6 +220,15 @@ class OrderRejectedOutbound:
     arr.extend(self.reason.encode(encoding='ascii'))
 
     return arr
+
+  def deserialize(self, msg: bytearray):
+    decoded_arr = msg.decode()
+    self.order_type = decoded_arr[0]
+    self.mpid = decoded_arr[1:11].strip()
+    self.order_id = decoded_arr[11:21].strip()
+    self.ticker = decoded_arr[21:29].strip()
+    self.timestamp = int.from_bytes(msg[29:37], 'big')
+    self.reason = decoded_arr[37:38]
 
 @dataclass
 class OrderExecutedOutbound:
@@ -260,7 +279,7 @@ class OrderExecutedOutbound:
     else:
       self.trade_id = self.trade_id.ljust(10, ' ')
     arr.extend(self.trade_id.encode(encoding='ascii'))
-    
+
     arr.extend(self.price.to_bytes(4, 'big'))
     arr.extend(self.size.to_bytes(4, 'big'))
 
