@@ -3,6 +3,7 @@
 Make exchange to send orders for TPC
 Need python script to verify order is valid.
 Make c++ script for serialization (see python script)
+Need to prevent wash trades (trading with oneself)
 
 Client sends order that looks like this:
 
