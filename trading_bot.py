@@ -41,7 +41,7 @@ class TradingBot:
 
   def establish_network_connections(self):
     context = zmq.Context()
-    self.gateway_socket = context.socket(zmq.PUSH)
+    self.gateway_socket = context.socket(zmq.PAIR)
     self.gateway_socket.connect(self.gateway_network_hostname)
 
     # self.market_data_socket = context.socket(zmq.SUB)
@@ -52,6 +52,9 @@ class TradingBot:
   def send_orders(self):
     try:
       while True:
+        heartbeat_msg = bytearray([87]) + self.name.encode('ascii')
+        self.gateway_socket.send(heartbeat_msg)
+        print(f"Sent heartbeat: {heartbeat_msg}")
         while len(self.outbound_msgs) > 0:
           msg = self.outbound_msgs[0]
           self.gateway_socket.send(msg.serialize())
@@ -59,7 +62,8 @@ class TradingBot:
           self.outbound_msgs.pop(0)
           # ouch_msg = self.gateway_socket.recv()
           # print(f"Received message: {ouch_msg}") # TODO: make this a separate process
-          time.sleep(1) # TODO: Remove
+          time.sleep(0.5) # TODO: Remove
+        time.sleep(1)
     except KeyboardInterrupt:
       print("Exiting")
 

@@ -557,7 +557,13 @@ class OrderMatchingEngine:
 
   def send_outbound_msgs(self):
     for msg in self.ouch_outbound_queue:
-      self.outbound_socket.send(msg)
+      print(f"Sending message: {msg}") # TODO: Log
+      actual_msg = bytearray(self.outbound_topic.encode())
+      actual_msg.extend(b" ")
+      actual_msg.extend(msg)
+
+      self.outbound_socket.send(actual_msg)
+      # self.outbound_socket.send(msg)
     self.ouch_outbound_queue = []
 
 
