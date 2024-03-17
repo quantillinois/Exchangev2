@@ -177,6 +177,28 @@ class OrderRejectedOutbound:
   # N - Orderid does not exist
   # C - Orderid has already been canceled
 
+  def serialize(self):
+    arr = bytearray()
+    arr.extend(self.order_type.encode(encoding='ascii'))
+
+    if len(self.mpid) > 10:
+      self.mpid = self.mpid[:10]
+    else:
+      self.mpid = self.mpid.ljust(10, ' ')
+    arr.extend(self.mpid.encode(encoding='ascii'))
+
+    if len(self.order_id) > 10:
+      raise ValueError("Order ID must be 10 characters long")
+    else:
+      self.order_id = self.order_id.ljust(10, ' ')
+    arr.extend(self.order_id.encode(encoding='ascii'))
+
+    arr.extend(self.ticker.encode(encoding='ascii'))
+    arr.extend(self.timestamp.to_bytes(8, 'big'))
+    arr.extend(self.reason.encode(encoding='ascii'))
+
+    return arr
+
 @dataclass
 class OrderExecutedOutbound:
   order_type: str
