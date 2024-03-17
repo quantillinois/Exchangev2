@@ -51,19 +51,22 @@ class TradingBot:
 
   def send_orders(self):
     try:
+      heartbeat_msg = bytearray([87]) + self.name.encode('ascii')
+      self.gateway_socket.send(heartbeat_msg)
+      print(f"Sent heartbeat: {heartbeat_msg}")
       while True:
-        heartbeat_msg = bytearray([87]) + self.name.encode('ascii')
-        self.gateway_socket.send(heartbeat_msg)
-        print(f"Sent heartbeat: {heartbeat_msg}")
         while len(self.outbound_msgs) > 0:
           msg = self.outbound_msgs[0]
           self.gateway_socket.send(msg.serialize())
           print(f"Sent message: {msg}")
           self.outbound_msgs.pop(0)
-          # ouch_msg = self.gateway_socket.recv()
-          # print(f"Received message: {ouch_msg}") # TODO: make this a separate process
-          time.sleep(0.5) # TODO: Remove
-        time.sleep(1)
+          # time.sleep(0.005) # TODO: Remove
+        try:
+          ouch_msg = self.gateway_socket.recv(zmq.NOBLOCK)
+          print(f"Received message: {ouch_msg}") # TODO: make this a separate process
+        except zmq.error.Again:
+          continue
+        time.sleep(0.005)
     except KeyboardInterrupt:
       print("Exiting")
 
@@ -84,8 +87,32 @@ class TradingBot:
       print("Exiting")
 
 
+  def read_ouch_messages(self):
+    try:
+      while True:
+        msg = self.gateway_socket.recv(zmq.NOBLOCK)
+        print(f"Received message: {msg}")
+    except KeyboardInterrupt:
+      print("Exiting")
+
+
   def run(self):
-    pass
+    # send_orders_process = multiprocessing.Process(target=self.send_orders)
+    # recv_ouch_process = multiprocessing.Process(target=self.read_ouch_messages)
+    # scan_market_data_process = multiprocessing.Process(target=self.scan_market_data)
+    # trade_process = multiprocessing.Process(target=self.trade)
+
+    # send_orders_process.start()
+    # recv_ouch_process.start()
+    # scan_market_data_process.start()
+    # trade_process.start()
+
+    # send_orders_process.join()
+    # recv_ouch_process.join()
+    # scan_market_data_process.join()
+    # trade_process.join()
+
+    print("Exiting")
 
 
 
