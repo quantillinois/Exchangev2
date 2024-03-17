@@ -29,12 +29,6 @@ class Gateway:
   def run(self):
     processes = []
     print("Starting exchange connection")
-    # write_to_exchange_daemon = Process(target=self.write_to_exchange_daemon, args=())
-    # # read_from_exchange_daemon = Process(target=self.read_from_exchange_daemon, args=())
-    # write_to_exchange_daemon.start()
-    # # read_from_exchange_daemon.start()
-    # write_to_exchange_daemon.join()
-    # # read_from_exchange_daemon.join()
     processes.append(mp.Process(target=self.read_from_exchange_daemon, args=()))
     processes[-1].start()
     processes.append(mp.Process(target=self.write_to_exchange_daemon, args=()))
@@ -63,6 +57,7 @@ class Gateway:
     context = zmq.Context()
     connection = context.socket(zmq.PUSH)
     connection.connect(f"tcp://{self.exchange_ip}:{self.exchange_inbound_port}")
+    time.sleep(1)
 
     while True:
       try:
@@ -83,6 +78,7 @@ class Gateway:
     connection = context.socket(zmq.SUB)
     connection.connect(f"tcp://{self.exchange_ip}:{self.exchange_outbound_port}")
     connection.setsockopt_string(zmq.SUBSCRIBE, "ENTRY-OME1")
+    time.sleep(1)
 
     while True:
       try:
@@ -108,6 +104,7 @@ class Gateway:
     connection = context.socket(zmq.PAIR)
     connection.bind(f"tcp://*:{port}")
     mpid = None
+    # time.sleep(2)
 
     def process_inbound_message(msg: bytearray, port: int, socket: zmq.Socket):
 
@@ -135,10 +132,11 @@ class Gateway:
           return
         if msg is None:
           return
-        # check mpid and port
-        # socket.send(msg) ####################
         if mpid is not None:
-          if msg[1:5] == mpid: # TODO: This seems sus, hardcoded
+          msg_mpid = msg[1:11]
+          if msg_mpid != mpid:
+            return
+          if msg[1:11] == mpid: # TODO: do not hardcode
             socket.send(msg)
       except zmq.error.Again:
         pass
@@ -148,16 +146,15 @@ class Gateway:
         msg = connection.recv(flags=zmq.NOBLOCK)
         if mpid is None:
           if msg[0] == 87:
-            mpid = msg[1:5]
+            mpid = msg[1:11] # TODO: do not hardcode
           else:
             print("MPID not set")
             connection.send(b'W')
           continue
         process_inbound_message(msg, port, connection)
-        process_outbound_message(port, connection)
       except zmq.error.Again:
         pass
-      time.sleep(0.005)
+      process_outbound_message(port, connection)
 
 
   # def send_order(self, arr: bytearray) -> bytearray:

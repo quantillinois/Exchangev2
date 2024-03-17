@@ -43,6 +43,7 @@ class TradingBot:
     context = zmq.Context()
     self.gateway_socket = context.socket(zmq.PAIR)
     self.gateway_socket.connect(self.gateway_network_hostname)
+    time.sleep(1)
 
     # self.market_data_socket = context.socket(zmq.SUB)
     # self.market_data_socket.connect(self.exchange_network_info.hostname_port)
@@ -50,25 +51,20 @@ class TradingBot:
 
 
   def send_orders(self):
-    try:
-      heartbeat_msg = bytearray([87]) + self.name.encode('ascii')
-      self.gateway_socket.send(heartbeat_msg)
-      print(f"Sent heartbeat: {heartbeat_msg}")
-      while True:
-        while len(self.outbound_msgs) > 0:
-          msg = self.outbound_msgs[0]
-          self.gateway_socket.send(msg.serialize())
-          print(f"Sent message: {msg}")
-          self.outbound_msgs.pop(0)
-          # time.sleep(0.005) # TODO: Remove
-        try:
-          ouch_msg = self.gateway_socket.recv(zmq.NOBLOCK)
-          print(f"Received message: {ouch_msg}") # TODO: make this a separate process
-        except zmq.error.Again:
-          continue
-        time.sleep(0.005)
-    except KeyboardInterrupt:
-      print("Exiting")
+    heartbeat_msg = bytearray([87]) + self.name.encode('ascii')
+    self.gateway_socket.send(heartbeat_msg)
+    print(f"Sent heartbeat: {heartbeat_msg}")
+    while True:
+      if len(self.outbound_msgs) > 0:
+        msg = self.outbound_msgs[0]
+        self.gateway_socket.send(msg.serialize())
+        print(f"Sent message: {msg}")
+        self.outbound_msgs.pop(0)
+      try:
+        ouch_msg = self.gateway_socket.recv(flags=zmq.NOBLOCK)
+        print(f"Received message: {ouch_msg}") # TODO: make this a separate process
+      except zmq.error.Again:
+        pass
 
 
   def scan_market_data(self):
@@ -127,9 +123,8 @@ if __name__ == "__main__":
   bot = TradingBot(args.name, "orders.txt", f"tcp://{args.ip}:{args.port}") # 192.168.56.10
 
   try:
-    while True:
-      bot.send_orders()
-      time.sleep(1)
+    bot.send_orders()
+    time.sleep(0.05)
   except KeyboardInterrupt:
     print("Exiting")
     sys.exit(0)
