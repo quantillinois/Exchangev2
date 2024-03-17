@@ -1,5 +1,5 @@
 import zmq
-from orderclass import OrderEntry, CancelOrder
+from orderclass import *
 import multiprocessing
 import time
 import sys
@@ -51,6 +51,22 @@ class TradingBot:
 
 
   def send_orders(self):
+    def parse_message(msg: bytearray):
+      msg_type = msg[0]
+      if msg_type == 87:
+        print(f"Received W")
+      elif msg_type == 65:
+        # print(f"Received A")
+        accept_order = OrderAcceptedOutbound("", "", "", "", 0, "", 0, 0)
+        accept_order.deserialize(msg)
+        print(accept_order)
+      elif msg_type == 69:
+        executed_order = OrderExecutedOutbound("", "", "", "", 0, "", "", "", 0, 0)
+        executed_order.deserialize(msg)
+        print(executed_order)
+      else:
+        print(f"Received unknown message. Msg code: {msg_type}")
+
     heartbeat_msg = bytearray([87]) + self.name.encode('ascii')
     self.gateway_socket.send(heartbeat_msg)
     print(f"Sent heartbeat: {heartbeat_msg}")
@@ -62,7 +78,8 @@ class TradingBot:
         self.outbound_msgs.pop(0)
       try:
         ouch_msg = self.gateway_socket.recv(flags=zmq.NOBLOCK)
-        print(f"Received message: {ouch_msg}") # TODO: make this a separate process
+        # print(f"Received message: {ouch_msg}") # TODO: make this a separate process
+        parse_message(ouch_msg)
       except zmq.error.Again:
         pass
       # time.sleep(0.5)
@@ -88,7 +105,8 @@ class TradingBot:
     try:
       while True:
         msg = self.gateway_socket.recv(zmq.NOBLOCK)
-        print(f"Received message: {msg}")
+        # print(f"Received message: {msg}")
+        # parse_message(msg)
     except KeyboardInterrupt:
       print("Exiting")
 
@@ -119,9 +137,10 @@ if __name__ == "__main__":
   parser.add_argument("--name", type=str, help="Name of the bot", default="Bot1")
   parser.add_argument("--ip", type=str, help="IP address of the gateway", default="localhost")
   parser.add_argument("--port", type=int, help="Port to bind to", default=2000)
+  parser.add_argument("--file", type=str, help="File containing orders", default="orders.txt")
 
   args = parser.parse_args()
-  bot = TradingBot(args.name, "orders.txt", f"tcp://{args.ip}:{args.port}") # 192.168.56.10
+  bot = TradingBot(args.name, args.file, f"tcp://{args.ip}:{args.port}") # 192.168.56.10
 
   try:
     bot.send_orders()

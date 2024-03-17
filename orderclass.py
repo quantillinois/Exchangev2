@@ -131,6 +131,18 @@ class OrderAcceptedOutbound:
 
     return arr
 
+  def deserialize(self, msg: bytearray):
+    decoded_arr = msg.decode()
+    self.order_type = decoded_arr[0]
+    self.mpid = decoded_arr[1:11].strip()
+    self.order_id = decoded_arr[11:21].strip()
+    self.ticker = decoded_arr[21:29].strip()
+    self.timestamp = int.from_bytes(msg[29:37], 'big')
+    self.side = decoded_arr[37]
+    self.price = int.from_bytes(msg[38:42], 'big')
+    self.size = int.from_bytes(msg[42:46], 'big')
+
+
 @dataclass
 class OrderCanceledOutbound:
   order_type: str # C
@@ -212,7 +224,7 @@ class OrderExecutedOutbound:
   price: int
   size: int
 
-  def serialize(self):
+  def serialize(self) -> bytearray:
     arr = bytearray()
     arr.extend(self.order_type.encode(encoding='ascii'))
 
@@ -230,10 +242,39 @@ class OrderExecutedOutbound:
 
     arr.extend(self.ticker.encode(encoding='ascii'))
     arr.extend(self.timestamp.to_bytes(8, 'big'))
+
+    if len(self.buyer_mpid) > 10:
+      self.buyer_mpid = self.buyer_mpid[:10]
+    else:
+      self.buyer_mpid = self.buyer_mpid.ljust(10, ' ')
     arr.extend(self.buyer_mpid.encode(encoding='ascii'))
+
+    if len(self.seller_mpid) > 10:
+      self.seller_mpid = self.seller_mpid[:10]
+    else:
+      self.seller_mpid = self.seller_mpid.ljust(10, ' ')
     arr.extend(self.seller_mpid.encode(encoding='ascii'))
+
+    if len(self.trade_id) > 10:
+      self.trade_id = self.trade_id[:10]
+    else:
+      self.trade_id = self.trade_id.ljust(10, ' ')
     arr.extend(self.trade_id.encode(encoding='ascii'))
+    
     arr.extend(self.price.to_bytes(4, 'big'))
     arr.extend(self.size.to_bytes(4, 'big'))
 
     return arr
+
+  def deserialize(self, msg: bytearray):
+    decoded_arr = msg.decode()
+    self.order_type = decoded_arr[0]
+    self.mpid = decoded_arr[1:11].strip()
+    self.order_id = decoded_arr[11:21].strip()
+    self.ticker = decoded_arr[21:29].strip()
+    self.timestamp = int.from_bytes(msg[29:37], 'big')
+    self.buyer_mpid = decoded_arr[37:47].strip()
+    self.seller_mpid = decoded_arr[47:57].strip()
+    self.trade_id = decoded_arr[57:67].strip()
+    self.price = int.from_bytes(msg[67:71], 'big')
+    self.size = int.from_bytes(msg[71:75], 'big')
