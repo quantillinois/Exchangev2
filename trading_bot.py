@@ -88,11 +88,12 @@ class TradingBot:
 if __name__ == "__main__":
   import argparse
   parser = argparse.ArgumentParser(description="Trading Bot")
+  parser.add_argument("--name", type=str, help="Name of the bot", default="Bot1")
   parser.add_argument("--ip", type=str, help="IP address of the gateway", default="localhost")
   parser.add_argument("--port", type=int, help="Port to bind to", default=2000)
 
   args = parser.parse_args()
-  bot = TradingBot("Bot1", "orders.txt", f"tcp://{args.ip}:2000") # 192.168.56.10
+  bot = TradingBot(args.name, "orders.txt", f"tcp://{args.ip}:{args.port}") # 192.168.56.10
 
   try:
     while True:
