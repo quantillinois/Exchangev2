@@ -81,7 +81,8 @@ class TradingBot:
     while True:
       if len(self.outbound_msgs) > 0:
         msg = self.outbound_msgs[0]
-        self.gateway_socket.send(msg.serialize())
+        msg = msg.serialize()
+        self.gateway_socket.send(msg)
         print(f"Sent message: {msg}")
         self.outbound_msgs.pop(0)
       try:

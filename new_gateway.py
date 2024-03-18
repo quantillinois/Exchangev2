@@ -85,7 +85,7 @@ class Gateway:
       try:
         try:
           raw = connection.recv(flags=zmq.NOBLOCK)
-          topic, msg = raw.split(b' ', 1)
+          topic, msg = raw.split(b'@', 1)
           self.ouch_outbound_exchange.put(msg)
           print(f"Received message from exchange: {msg}")
         except zmq.error.Again:

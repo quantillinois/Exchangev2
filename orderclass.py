@@ -297,3 +297,120 @@ class OrderExecutedOutbound:
     self.trade_id = decoded_arr[57:67].strip()
     self.price = int.from_bytes(msg[67:71], 'big')
     self.size = int.from_bytes(msg[71:75], 'big')
+
+
+### Market Data messages ###
+
+@dataclass
+class ITCH_Trade:
+  order_type: str # T
+  ticker: str
+  timestamp: int
+  price: int
+  size: int
+  buyer_exchange_order_id: str
+  seller_exchange_order_id: str
+  exchange_trade_id: str
+
+  def serialize(self) -> bytearray:
+    arr = bytearray()
+    arr.extend(self.order_type.encode(encoding='ascii'))
+    arr.extend(self.ticker.encode(encoding='ascii')) # 8
+    arr.extend(self.timestamp.to_bytes(8, 'big')) # 8
+    arr.extend(self.price.to_bytes(4, 'big')) # 4
+    arr.extend(self.size.to_bytes(4, 'big')) # 4
+    
+    if len(self.buyer_exchange_order_id) > 10:
+      self.buyer_exchange_order_id = self.buyer_exchange_order_id[:10]
+    else:
+      self.buyer_exchange_order_id = self.buyer_exchange_order_id.ljust(10, ' ')
+    arr.extend(self.buyer_exchange_order_id.encode(encoding='ascii'))
+
+    if len(self.seller_exchange_order_id) > 10:
+      self.seller_exchange_order_id = self.seller_exchange_order_id[:10]
+    else:
+      self.seller_exchange_order_id = self.seller_exchange_order_id.ljust(10, ' ')
+    arr.extend(self.seller_exchange_order_id.encode(encoding='ascii'))
+
+    arr.extend(self.exchange_trade_id.encode(encoding='ascii')) # 10
+    return arr
+
+  def deserialize(self, msg: bytearray):
+    decoded_arr = msg.decode()
+    self.order_type = decoded_arr[0]
+    self.ticker = decoded_arr[1:9].strip()
+    self.timestamp = int.from_bytes(msg[9:17], 'big')
+    self.price = int.from_bytes(msg[17:21], 'big')
+    self.size = int.from_bytes(msg[21:25], 'big')
+    self.buyer_exchange_order_id = decoded_arr[25:35].strip()
+    self.seller_exchange_order_id = decoded_arr[35:45].strip()
+    self.exchange_trade_id = decoded_arr[45:55].strip()
+
+@dataclass
+class ITCH_OrderbookBBO:
+  ticker: str
+  timestamp: int
+  best_bid_price: int
+  best_ask_price: int
+  best_bid_volume: int
+  best_ask_volume: int
+  total_bid_volume: int
+  total_ask_volume: int
+  top10_bids: dict[int, int] # price to volume, in descending order
+  top10_asks: dict[int, int] # price to volume, in ascending order
+
+
+@dataclass
+class ITCH_AddOrder:
+  order_type: str # A
+  ticker: str
+  timestamp: int
+  exchange_order_id: str
+  side: str
+  price: int
+  shares: int
+
+  def serialize(self) -> bytearray:
+    arr = bytearray()
+    arr.extend(self.order_type.encode(encoding='ascii'))
+    arr.extend(self.ticker.encode(encoding='ascii'))
+    arr.extend(self.timestamp.to_bytes(8, 'big'))
+
+    if len(self.exchange_order_id) > 10:
+      self.exchange_order_id = self.exchange_order_id[:10]
+    else:
+      self.exchange_order_id = self.exchange_order_id.ljust(10, ' ')
+    arr.extend(self.exchange_order_id.encode(encoding='ascii'))
+
+    arr.extend(self.side.encode(encoding='ascii'))
+    arr.extend(self.price.to_bytes(4, 'big'))
+    arr.extend(self.shares.to_bytes(4, 'big'))
+    return arr
+
+  def deserialize(self, msg: bytearray):
+    decoded_arr = msg.decode()
+    self.order_type = decoded_arr[0]
+    self.ticker = decoded_arr[1:9].strip()
+    self.timestamp = int.from_bytes(msg[9:17], 'big')
+    self.exchange_order_id = decoded_arr[17:27].strip()
+    self.side = decoded_arr[27:28]
+    self.price = int.from_bytes(msg[28:32], 'big')
+    self.shares = int.from_bytes(msg[32:36], 'big')
+
+@dataclass
+class ITCH_OrderCancel:
+  order_type: str # C
+  ticker: str
+  timestamp: int
+  exchange_order_id: str
+  canceled_shares: int
+
+  def serialize(self) -> bytearray:
+    arr = bytearray()
+    arr.extend(self.order_type.encode(encoding='ascii'))
+    arr.extend(self.ticker.encode(encoding='ascii'))
+    arr.extend(self.timestamp.to_bytes(8, 'big'))
+    arr.extend(self.exchange_order_id.encode(encoding='ascii'))
+    arr.extend(self.canceled_shares.to_bytes(4, 'big'))
+    return arr
+

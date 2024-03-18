@@ -72,8 +72,10 @@ class TradeMessage:
   volume: int
   buyer_mpid: str
   buyer_order_id: str
+  buyer_exchange_order_id: str
   seller_mpid: str
   seller_order_id: str
+  seller_exchange_order_id: str
   trade_id: str
 
   def serialize(self):
@@ -206,8 +208,21 @@ class OrderBook:
     ))
     return order_executed_outbound_msgs
 
+  def itch_outbound_msg_from_trade(self, trade: TradeMessage) -> ITCH_Trade:
+    itch_trade = ITCH_Trade(
+      order_type="T",
+      ticker=trade.ticker,
+      timestamp=trade.timestamp,
+      price=trade.price,
+      size=trade.volume,
+      buyer_exchange_order_id=trade.buyer_exchange_order_id,
+      seller_exchange_order_id=trade.seller_exchange_order_id,
+      exchange_trade_id=trade.trade_id
+    )
+    return itch_trade
 
-  def add_order(self, order: Order) -> tuple[Order, list[OrderExecutedOutbound]]:
+
+  def add_order(self, order: Order) -> tuple[Order, list[OrderExecutedOutbound], list]:
     """Add order to orderbook and execute trades if possible. Return leftover order and outbound messages.
 
     Args:
@@ -217,6 +232,7 @@ class OrderBook:
       A tuple containing the leftover order and a list of outbound messages to be sent to the clients.
     """
     order_executed_outbound_msgs = []
+    itch_executed_outbound_msgs = []
     leftover_order = None
     if order.side == Side.BUY:
       while order.price >= self.best_ask and order.volume > 0: # Iterate through price levels
@@ -233,12 +249,15 @@ class OrderBook:
               volume=resting_ask_order.volume,
               buyer_mpid=order.mpid,
               buyer_order_id=order.mpid_orderid,
+              buyer_exchange_order_id=order.order_id,
               seller_mpid=resting_ask_order.mpid,
               seller_order_id=resting_ask_order.mpid_orderid,
+              seller_exchange_order_id=resting_ask_order.order_id,
               trade_id=self.trade_id_generator.generate_trade_id()
             )
             self.outbound_trade_msgs.append(trade_msg)
             order_executed_outbound_msgs.extend(self.ouch_outbound_msg_from_trade(trade_msg))
+            itch_executed_outbound_msgs.append(self.itch_outbound_msg_from_trade(trade_msg))
 
             order.volume -= resting_ask_order.volume
             self.orderbook[self.best_ask].ask_total_volume -= resting_ask_order.volume
@@ -256,12 +275,15 @@ class OrderBook:
               volume=order.volume,
               buyer_mpid=order.mpid,
               buyer_order_id=order.mpid_orderid,
+              buyer_exchange_order_id=order.order_id,
               seller_mpid=resting_ask_order.mpid,
               seller_order_id=resting_ask_order.mpid_orderid,
+              seller_exchange_order_id=resting_ask_order.order_id,
               trade_id=self.trade_id_generator.generate_trade_id()
             )
             self.outbound_trade_msgs.append(trade_msg)
             order_executed_outbound_msgs.extend(self.ouch_outbound_msg_from_trade(trade_msg))
+            itch_executed_outbound_msgs.append(self.itch_outbound_msg_from_trade(trade_msg))
 
             resting_ask_order.volume -= order.volume
             self.orderbook[self.best_ask].ask_total_volume -= order.volume
@@ -279,6 +301,8 @@ class OrderBook:
         if order.price > self.best_bid:
           self.best_bid = order.price
         leftover_order = order
+        # itch_add_order = ITCH_AddOrder("A", order.symbol, order.timestamp, order.order_id, "B" if order.side == Side.BUY else "S", order.price, order.volume)
+        # itch_executed_outbound_msgs.append(itch_add_order)
 
     elif order.side == Side.SELL:
       while order.price <= self.best_bid and order.volume > 0:
@@ -295,12 +319,15 @@ class OrderBook:
               volume=resting_bid_order.volume,
               buyer_mpid=resting_bid_order.mpid,
               buyer_order_id=resting_bid_order.mpid_orderid,
+              buyer_exchange_order_id=resting_bid_order.order_id,
               seller_mpid=order.mpid,
               seller_order_id=order.mpid_orderid,
+              seller_exchange_order_id=order.order_id,
               trade_id=self.trade_id_generator.generate_trade_id()
             )
             self.outbound_trade_msgs.append(trade_msg)
             order_executed_outbound_msgs.extend(self.ouch_outbound_msg_from_trade(trade_msg))
+            itch_executed_outbound_msgs.append(self.itch_outbound_msg_from_trade(trade_msg))
 
             order.volume -= resting_bid_order.volume
             self.orderbook[self.best_bid].bid_total_volume -= resting_bid_order.volume
@@ -318,12 +345,15 @@ class OrderBook:
               volume=order.volume,
               buyer_mpid=resting_bid_order.mpid,
               buyer_order_id=resting_bid_order.mpid_orderid,
+              buyer_exchange_order_id=resting_bid_order.order_id,
               seller_mpid=order.mpid,
               seller_order_id=order.mpid_orderid,
+              seller_exchange_order_id=order.order_id,
               trade_id=self.trade_id_generator.generate_trade_id()
             )
             self.outbound_trade_msgs.append(trade_msg)
             order_executed_outbound_msgs.extend(self.ouch_outbound_msg_from_trade(trade_msg))
+            itch_executed_outbound_msgs.append(self.itch_outbound_msg_from_trade(trade_msg))
 
             resting_bid_order.volume -= order.volume
             self.orderbook[self.best_bid].bid_total_volume -= order.volume
@@ -340,6 +370,8 @@ class OrderBook:
         if order.price < self.best_ask:
           self.best_ask = order.price
         leftover_order = order
+        # itch_add_order = ITCH_AddOrder("A", order.symbol, order.timestamp, order.order_id, "B" if order.side == Side.BUY else "S", order.price, order.volume)
+        # itch_executed_outbound_msgs.append(itch_add_order)
 
     if self.total_ask_orders == 0:
       self.best_ask = self.max_price
@@ -347,10 +379,10 @@ class OrderBook:
     if self.total_bid_orders == 0:
       self.best_bid = self.min_price
 
-    return (leftover_order, order_executed_outbound_msgs)
+    return (leftover_order, order_executed_outbound_msgs, itch_executed_outbound_msgs)
 
 
-  def cancel_order(self, order_id: str) -> tuple[Order, list[OrderCanceledOutbound]]:
+  def cancel_order(self, order_id: str) -> tuple[Order, list[OrderCanceledOutbound], list[ITCH_OrderCancel]]:
     # TODO: Optimize O(n) to O(1)
     order = self.orderid_map.get(order_id, None)
     if order is None:
@@ -377,17 +409,18 @@ class OrderBook:
       while self.orderbook[self.best_ask].ask_total_orders == 0 and self.best_ask < self.max_price:
         self.best_ask += 1
 
-    order_canceled_outbound_msgs = \
+    ouch_cancel = \
     OrderCanceledOutbound(
       order_type="C",
       mpid=order.mpid,
-      order_id=order.order_id,
+      order_id=order.mpid_orderid,
       ticker=order.symbol,
       timestamp=self.timer.get_time(),
       decremented_shares=order.volume,
       reason="U"
     )
-    return (order, [order_canceled_outbound_msgs])
+    itch_order_cancel = ITCH_OrderCancel("C", ouch_cancel.ticker, ouch_cancel.timestamp, order.order_id, ouch_cancel.decremented_shares)
+    return (order, [ouch_cancel], [itch_order_cancel])
 
   def modify_order(self, order_id, new_order):
     # TODO: Implement
@@ -425,8 +458,9 @@ class OrderBook:
 
 
 class OrderMatchingEngine:
-  def __init__(self, symbols: list[TickerConfiguration], timer: Timer):
+  def __init__(self, symbols: list[TickerConfiguration], timer: Timer, exchange_order_id_generator: ExchangeOrderIDGenerator):
     self.timer = timer
+    self.exchange_order_id_generator = exchange_order_id_generator
 
     self.orderbooks = {}
     for symbol_config in symbols:
@@ -452,6 +486,7 @@ class OrderMatchingEngine:
     self.market_data_socket = context.socket(zmq.PUB)
     self.market_data_socket.bind("tcp://*:10001") # TODO: Refactor
     self.market_data_topic = "MDF-OME1"
+    self.bbo_topic = "BBO10-OME1"
 
 
   def run(self):
@@ -462,9 +497,10 @@ class OrderMatchingEngine:
       self.get_inbound_msgs_daemon()
       # for ticker in self.orderbooks:
       #   self.get_outbound_msgs(ticker)
+      self.send_market_data()
       self.send_outbound_msgs()
 
-  def process_order(self, order: bytearray) -> list[bytearray]:
+  def process_order(self, order: bytearray) -> tuple[list[bytearray], list[bytearray]]:
     switch = {
       b'O': self.process_order_entry,
       b'C': self.process_cancel_order
@@ -477,15 +513,29 @@ class OrderMatchingEngine:
     return switch[order_type](order)
 
 
-  def process_order_entry(self, order: bytearray) -> list[bytearray]:
-    outbound_messages = []
+  def process_order_entry(self, order: bytearray) -> tuple[list[bytearray], list[bytearray]]:
+    def itch_order_from_order_accept(order: Order) -> tuple[bytearray]:
+      itch_order_accepted = ITCH_AddOrder(
+        order_type="A",
+        ticker=order.symbol,
+        timestamp=order.timestamp,
+        exchange_order_id=order.order_id,
+        side="B" if order.side == Side.BUY else "S",
+        price=order.price,
+        shares=order.volume
+      )
+      return [itch_order_accepted]
+
+    itch_messages = []
     order_entry = OrderEntry("", "", "", "", "", 0, 0)
     order_entry.deserialize(order)
-    # TODO: Check if order is valid?
+    # TODO: Check if order_entry is valid?
     accepted_order_outbound = OrderAcceptedOutbound("A", order_entry.mpid, order_entry.order_id, order_entry.ticker, self.timer.get_time(), order_entry.side, order_entry.price, order_entry.size)
-    order = Order(order_entry.order_id, order_entry.ticker, order_entry.price, order_entry.size, order_entry.mpid, order_entry.order_id, self.timer.get_time(), order_entry.side)
+    order = Order(self.exchange_order_id_generator.generate_trade_id(), order_entry.ticker, order_entry.price, order_entry.size, order_entry.mpid, order_entry.order_id, self.timer.get_time(), order_entry.side)
+    itch_messages.extend(itch_order_from_order_accept(order))
     ob = self.orderbooks[order_entry.ticker]
-    leftover_order, trade_messages = ob.add_order(order)
+    leftover_order, trade_messages, itch_msgs = ob.add_order(order)
+    itch_messages.extend(itch_msgs)
     if leftover_order is not None:
       self.orderid_to_ticker_map[leftover_order.order_id] = order_entry.ticker
       print(f"Order {leftover_order.order_id} added to orderbook with volume {leftover_order.volume} at price {leftover_order.price}") # TODO: Log
@@ -493,13 +543,14 @@ class OrderMatchingEngine:
       print(f"Order {order.order_id} fully traded") # TODO: Log
       self.orderid_to_ticker_map[order.order_id] = None
 
-    outbound_messages.append(accepted_order_outbound.serialize())
-    outbound_messages.extend([trade.serialize() for trade in trade_messages])
-    return outbound_messages
+    outbound_messages = []
+    outbound_messages.append(accepted_order_outbound)
+    outbound_messages.extend(trade_messages)
+    return [msg.serialize() for msg in outbound_messages], [msg.serialize() for msg in itch_messages]
 
 
 
-  def process_cancel_order(self, order: bytearray) -> list[bytearray]:
+  def process_cancel_order(self, order: bytearray) -> tuple[list[bytearray], list[bytearray]]:
     outbound_messages = []
     cancel_order = CancelOrder("", "", "", "")
     cancel_order.deserialize(order)
@@ -511,16 +562,14 @@ class OrderMatchingEngine:
       print(f"Order ID {cancel_order.order_id} has been completed previously")
       return self.process_invalid_entry(order, 'C')
     ob = self.orderbooks[ticker]
-    canceled_order, messages = ob.cancel_order(cancel_order.order_id)
+    canceled_order, ouch_messages, itch_messages = ob.cancel_order(cancel_order.order_id)
     self.orderid_to_ticker_map[cancel_order.order_id] = None
     print(f"Order {cancel_order.order_id} cancelled") # TODO: Log
 
-    for msg in messages:
-      outbound_messages.append(msg.serialize())
-    return outbound_messages
+    return [msg.serialize() for msg in ouch_messages], [msg.serialize() for msg in itch_messages]
 
 
-  def process_invalid_entry(self, order: bytearray, reason: str) -> list[bytearray]:
+  def process_invalid_entry(self, order: bytearray, reason: str) -> tuple[list[bytearray], list[bytearray]]:
     print(f"Invalid: {order}") # TODO: Log
     reject_order = OrderRejectedOutbound(
       order_type="J",
@@ -530,18 +579,27 @@ class OrderMatchingEngine:
       timestamp=self.timer.get_time(),
       reason=reason
     )
-    return [reject_order.serialize()]
+    return [reject_order.serialize()], []
 
 
 
-  def get_outbound_msgs(self, ticker: str) -> list[TradeMessage]:
-    ob = self.orderbooks[ticker]
-    # for msg in ob.outbound_msgs:
-    #   self.ouch_outbound_queue.append(msg.serialize())
-    # ob.outbound_msgs = []
-
-    # Send market data
-    self.market_data_socket.send_multipart([self.market_data_topic.encode(), str(ob).encode()]) # Orderbook data
+  def send_market_data(self) -> None:
+    for itch_msg in self.mdf_outbound_queue:
+      print(f"Sending market data: {itch_msg}")
+      actual_msg = bytearray(self.market_data_topic.encode())
+      actual_msg.extend(b"@")
+      actual_msg.extend(itch_msg)
+      self.market_data_socket.send(actual_msg)
+    self.mdf_outbound_queue = []
+      # match ouch_msg[0]:
+      #   case 65: # A - Order Accepted
+      #     pass
+      #   case 67: # C - Order Canceled
+      #     pass
+      #   case 69: # E - Order Executed
+      #     pass
+      #   case 74: # J - Order Rejected
+      #     pass
 
 
   def get_inbound_msgs_daemon(self):
@@ -549,7 +607,8 @@ class OrderMatchingEngine:
     try:
       message = self.inbound_socket.recv(flags=zmq.NOBLOCK)
       print(f"Received message: {message}") # TODO: Log
-      outbound_messages = self.process_order(message)
+      outbound_messages, itch_messages = self.process_order(message)
+      self.mdf_outbound_queue.extend(itch_messages)
       self.ouch_outbound_queue.extend(outbound_messages)
     except zmq.error.Again:
       pass
@@ -559,7 +618,7 @@ class OrderMatchingEngine:
     for msg in self.ouch_outbound_queue:
       print(f"Sending message: {msg}") # TODO: Log
       actual_msg = bytearray(self.outbound_topic.encode())
-      actual_msg.extend(b" ")
+      actual_msg.extend(b"@")
       actual_msg.extend(msg)
 
       self.outbound_socket.send(actual_msg)
@@ -571,7 +630,7 @@ class OrderMatchingEngine:
 if __name__ == "__main__":
   timer = Timer()
   ticker_config = TickerConfiguration("TPCF1010", 1, 200, 1, 2, "cash", 1)
-  matching_engine = OrderMatchingEngine([ticker_config], timer)
+  matching_engine = OrderMatchingEngine([ticker_config], timer, ExchangeOrderIDGenerator())
   matching_engine.run()
   # try:
   #   while True:
