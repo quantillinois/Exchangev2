@@ -4,17 +4,29 @@ import multiprocessing as mp
 import time
 import sys
 import queue
+from dataclasses import dataclass
+@dataclass
+class TickerplantInfo:
+  ip_addr: str
+  port: int
+  topics: list[str]
+
+@dataclass # TODO: Refactor
+class ExchangeInfo:
+  ip_addr: str
+  port: int
 
 class TradingBot:
-  def __init__(self, name: str, order_file: str, gateway_network_hostname: str):
+  def __init__(self, name: str, order_file: str, exchange_network_info: ExchangeInfo, tickerplant_info: TickerplantInfo):
     self.name = name
     if len(self.name) > 10:
       self.name = self.name[:10]
     else:
       self.name = self.name.ljust(10, ' ')
     self.order_file = order_file
-    self.gateway_network_hostname : str = gateway_network_hostname
-    self.exchange_network_info = None # TODO
+    # self.gateway_network_hostname : str = gateway_network_hostname
+    self.exchange_network_info = exchange_network_info
+    self.tickerplant_info = tickerplant_info
     self.outbound_msgs = mp.Queue()
     self.inbound_msgs = []
     self.trades = []
@@ -42,22 +54,26 @@ class TradingBot:
 
   def run(self):
     processes = []
-    send_orders_process = mp.Process(target=self.send_orders, args=())
+    send_orders_process = mp.Process(target=self.send_orders, args=(self.exchange_network_info.ip_addr, self.exchange_network_info.port))
     send_orders_process.start()
     processes.append(send_orders_process)
 
-    recv_mdf_process = mp.Process(target=self.scan_market_data, args=())
+    recv_mdf_process = mp.Process(target=self.scan_market_data, args=(self.tickerplant_info.ip_addr, self.tickerplant_info.port, self.tickerplant_info.topics))
     recv_mdf_process.start()
     processes.append(recv_mdf_process)
+
+    trade_logic_process = mp.Process(target=self.trade, args=())
+    trade_logic_process.start()
+    processes.append(trade_logic_process)
 
     for process in processes:
       process.join()
 
 
-  def send_orders(self):
+  def send_orders(self, exchange_ip_addr : str, exchange_port : int):
     context = zmq.Context()
     self.gateway_socket = context.socket(zmq.PAIR)
-    self.gateway_socket.connect(self.gateway_network_hostname)
+    self.gateway_socket.connect(f"tcp://{exchange_ip_addr}:{exchange_port}")
     time.sleep(1)
 
     def parse_message(msg: bytearray):
@@ -104,11 +120,32 @@ class TradingBot:
       # time.sleep(0.5)
 
 
-  def scan_market_data(self): # TODO: Finish writing this
+  def scan_market_data(self, tickerplant_ip_addr : str, tickerplant_port : int, topics : list[str]): # TODO: Finish writing this
+    def parse_itch(msg: bytearray):
+      msg_type = msg[0]
+      match msg_type:
+        case 65: # A
+          add_order = ITCH_AddOrder("", "", 0, "", "", 0, 0)
+          add_order.deserialize(msg)
+          return add_order
+        case 67: # C
+          cancel_order = ITCH_OrderCancel("", "", 0, "", 0)
+          cancel_order.deserialize(msg)
+          return cancel_order
+        case 69: # E
+          trade = ITCH_Trade("", 0, 0, 0, 0, "", "", "")
+          trade.deserialize(msg)
+          return trade
+        case _:
+          print(f"Received unknown message. Msg code: {msg_type}")
+          return None
+
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
-    socket.connect("tcp://localhost:11000")
-    socket.setsockopt_string(zmq.SUBSCRIBE, "TPCF1010-BBO5")
+    socket.connect(f"tcp://{tickerplant_ip_addr}:{tickerplant_port}")
+    # socket.setsockopt_string(zmq.SUBSCRIBE, "TPCF1010-ITCH")
+    for topic in topics:
+      socket.setsockopt_string(zmq.SUBSCRIBE, topic)
     time.sleep(1)
 
     try:
@@ -116,15 +153,19 @@ class TradingBot:
         try:
           msg = socket.recv(flags=zmq.NOBLOCK)
           topic, msg = msg.split(b'@', 1)
-          # print(topic, msg)
-          bbo = MDF_BBO5("", 0, 0, 0, 0, 0, 0, 0, {}, {})
-          bbo.deserialize(msg)
-          print(f"BBO5: {bbo}")
-          # print(f"Received BBO5")
+          ticker, topic_type = topic.decode().split('-')
+          match topic_type:
+            case "BBO5":
+              bbo = MDF_BBO5("", 0, 0, 0, 0, 0, 0, 0, {}, {})
+              bbo.deserialize(msg)
+              print(f"{topic}: {bbo}")
+            case "ITCH":
+              itch_order = parse_itch(msg)
+              print(f"{topic}: {itch_order}")
         except zmq.error.Again:
           # print("No message received")
           pass
-        time.sleep(0.5)
+        time.sleep(0.005)
     except KeyboardInterrupt:
       print("Exiting")
 
@@ -132,17 +173,7 @@ class TradingBot:
   def trade(self):
     try:
       while True:
-        pass
-    except KeyboardInterrupt:
-      print("Exiting")
-
-
-  def read_ouch_messages(self):
-    try:
-      while True:
-        msg = self.gateway_socket.recv(zmq.NOBLOCK)
-        # print(f"Received message: {msg}")
-        # parse_message(msg)
+        time.sleep(1)
     except KeyboardInterrupt:
       print("Exiting")
 
@@ -157,7 +188,10 @@ if __name__ == "__main__":
   parser.add_argument("--file", type=str, help="File containing orders", default="orders.txt")
 
   args = parser.parse_args()
-  bot = TradingBot(args.name, args.file, f"tcp://{args.ip}:{args.port}") # 192.168.56.10
+  exchange_info = ExchangeInfo("localhost", 2001)
+  tickerplant_info = TickerplantInfo("localhost", 11000, ["TPCF1010-BBO5", "TPCF1010-ITCH"])
+
+  bot = TradingBot(args.name, args.file, exchange_info, tickerplant_info) # 192.168.56.10
 
   try:
     bot.run()

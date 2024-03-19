@@ -489,7 +489,7 @@ class OrderMatchingEngine:
     self.market_data_socket = context.socket(zmq.PUB)
     self.market_data_socket.bind("tcp://*:10001") # TODO: Refactor
     self.market_data_topic = "MDF-OME1"
-    self.bbo_topic = "BBO10-OME1"
+    self.bbo_topic = "BBO5-OME1"
 
 
   def run(self):

@@ -166,10 +166,10 @@ class Tickerplant():
     processes = []
     print("Starting exchange connection")
     for exchange_info in self.exchange_infos:
-      for topic in exchange_info.topics:
-        process = mp.Process(target=self.exchange_daemon, args=(exchange_info.ip_addr, exchange_info.port, topic))
-        process.start()
-        processes.append(process)
+      # for topic in exchange_info.topics:
+      process = mp.Process(target=self.exchange_daemon, args=(exchange_info.ip_addr, exchange_info.port, exchange_info.topics))
+      process.start()
+      processes.append(process)
 
     print("Starting generator connection")
     for generator_info in self.generator_infos:
@@ -188,12 +188,11 @@ class Tickerplant():
 
 
   def tickerplant_daemon(self, port: int):
-    def concatenate_topic(topic: str, outbound_obj) -> bytearray:
-      print(f"Sending object: {outbound_obj}")
+    def concatenate_topic(topic: str, outbound_msg: bytearray) -> bytearray:
       data = bytearray()
       data.extend(topic.encode("ascii"))
       data.extend(b"@")
-      data.extend(outbound_obj.serialize())
+      data.extend(outbound_msg)
       return data
 
     context = zmq.Context()
@@ -205,9 +204,9 @@ class Tickerplant():
         tup = self.outbound_messages.get_nowait()
         if tup is None:
           continue
-        topic, obj = tup
-        msg = concatenate_topic(topic, obj)
-        # print(f"Sending message: {msg}")
+        topic, msg = tup
+        msg = concatenate_topic(topic, msg)
+        print(f"Sending message: {topic}")
         socket.send(msg)
       except queue.Empty:
         pass
@@ -215,14 +214,8 @@ class Tickerplant():
 
 
 
-  def exchange_daemon(self, ip_addr: str, port: int, topic: str):
-    context = zmq.Context()
-    socket = context.socket(zmq.SUB)
-    socket.connect(f"tcp://{ip_addr}:{port}")
-    if topic is not None:
-      socket.setsockopt_string(zmq.SUBSCRIBE, topic)
-
-    def parse_itch_msg(msg: str) -> list[tuple]:
+  def exchange_daemon(self, ip_addr: str, port: int, topics: list[str]):
+    def parse_itch_msg(msg: str) -> list[tuple[str, bytearray]]:
       def parse_market_data(msg: str):
         byte_arr = bytearray(msg, "ascii")
         msg_type = byte_arr[0]
@@ -235,8 +228,8 @@ class Tickerplant():
             print(f"Unknown message type: {msg_type}")
             return None
 
-      def create_bbo10(orderbook: ITCH_Orderbook) -> list[tuple]:
-        print(f"Sending BBO5")
+      def create_bbo5(orderbook: ITCH_Orderbook) -> list[tuple[str, bytearray]]:
+        # print(f"Sending BBO5")
         bbo5 = MDF_BBO5(
           ticker=orderbook.ticker_configuration.symbol,
           timestamp=self.timer.get_time(), # TODO: WARNING NOT THREAD SAFE
@@ -268,26 +261,35 @@ class Tickerplant():
             continue
           bbo5.top5_asks[price] = orderbook.orderbook[price].ask_total_volume
 
-        return [(f"{bbo5.ticker}-BBO5", bbo5)]
+        return [(f"{bbo5.ticker}-BBO5", bbo5.serialize())]
 
       topic, data = msg.split("@", 1)
       # print(f"Topic: {topic}, Data: {data}")
       subject, ome = topic.split("-", 1)
+      outbound_msgs = []
       match subject:
         case "MDF":
-          print(f"Market data feed: {data}")
+          print(f"Received MDF from {ome}, Order type: {data[0]}")
           updated_orderbook = parse_market_data(data)
+          outbound_msgs.append((f"{updated_orderbook.ticker_configuration.symbol}-ITCH", data.encode()))
           if updated_orderbook is not None:
-            return create_bbo10(updated_orderbook)
+            outbound_msgs.extend(create_bbo5(updated_orderbook))
         case _:
           print("Unknown message type")
 
-      return outbound_messages
+      return outbound_msgs
+
+    context = zmq.Context()
+    socket = context.socket(zmq.SUB)
+    socket.connect(f"tcp://{ip_addr}:{port}")
+    for topic in topics:
+      socket.setsockopt_string(zmq.SUBSCRIBE, topic)
+    outbound_messages = []
 
     try:
       while True:
         try:
-          msg = socket.recv_string(flags=zmq.NOBLOCK)
+          msg = socket.recv_string(flags=zmq.NOBLOCK) # TODO: Determine if this should be recv string or just recv
           # print(f"{msg}")
           outbound_messages = parse_itch_msg(msg)
           for outbound_msg in outbound_messages:
@@ -337,7 +339,7 @@ if __name__ == "__main__":
   # except KeyboardInterrupt:
   #   print("Exiting")
 
-  exchange_info = ExchangeInfo("localhost", 10001, ["MDF-OME1", "BBO10-OME1"])
+  exchange_info = ExchangeInfo("localhost", 10001, ["MDF-OME1", "BBO5-OME1"])
   gen_info = GeneratorInfo("localhost", 7000, ["TPC"])
   tpcf1010_info = TickerConfiguration("TPCF1010", 1, 200, 1, 2, "cash", 1)
   tp = Tickerplant(11000, [exchange_info], [gen_info], [tpcf1010_info], Timer())

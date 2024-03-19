@@ -6,6 +6,8 @@ Make c++ script for serialization (see python script)
 Need to prevent wash trades (trading with oneself)
 ITCH check which orders are yours for client
 For market orders, make sure to not reveal the underlying limit order(s) ie. market = limit order buy @ max price, but shouldn't show accepted at max price, just trade?
+Grab full orderbook from tickerplant if needed.
+Make it so that gateway knows which mpid for which port in advance through config file
 
 Client sends order that looks like this:
 
