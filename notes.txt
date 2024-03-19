@@ -4,6 +4,8 @@ Make exchange to send orders for TPC
 Need python script to verify order is valid.
 Make c++ script for serialization (see python script)
 Need to prevent wash trades (trading with oneself)
+ITCH check which orders are yours for client
+For market orders, make sure to not reveal the underlying limit order(s) ie. market = limit order buy @ max price, but shouldn't show accepted at max price, just trade?
 
 Client sends order that looks like this:
 
@@ -31,5 +33,6 @@ Ports:
 8000 - GW to OME (Server)
 9000 - OME to GW (Publisher) <- honestly idk if this can be done through server or if publisher is the right move
 10000 - Market Feed from OME (Publisher)
+11000 - Tickerplant to Bot/Client
 
 For Pub/Sub, @ symbol (64) is used to delimit topic, msg

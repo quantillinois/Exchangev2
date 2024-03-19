@@ -127,20 +127,21 @@ class PriceLevel:
 
 class PriceLevelList():
   def __init__(self, min_price: int, max_price: int, *args, **kwargs):
+    assert min_price <= max_price, "Min price must be less than or equal to max price"
     self.price_level_list = [PriceLevel(price=price, bids=[], bid_total_volume=0, bid_total_orders=0, asks=[], ask_total_volume=0, ask_total_orders=0) for price in range(min_price, max_price+1)]
     self.min_price = min_price
     self.max_price = max_price
 
   def __getitem__(self, key):
     if key < self.min_price:
-      raise ValueError(f"Price levels start at {self.min_price}")
+      raise ValueError(f"Accessed price: {key}, but price levels start at {self.min_price}")
     if key > self.max_price:
       raise IndexError("Price level does not exist: " + str(key))
     return self.price_level_list[key-self.min_price]
 
   def __setitem__(self, key, value):
     if key < self.min_price:
-      raise ValueError(f"Price levels start at {self.min_price}")
+      raise ValueError(f"Accessed price: {key}, but price levels start at {self.min_price}")
     if key > self.max_price:
       raise IndexError("Price level does not exist: " + str(key))
     self.price_level_list[key-self.min_price] = value
@@ -208,13 +209,14 @@ class OrderBook:
     ))
     return order_executed_outbound_msgs
 
+
   def itch_outbound_msg_from_trade(self, trade: TradeMessage) -> ITCH_Trade:
     itch_trade = ITCH_Trade(
       order_type="T",
       ticker=trade.ticker,
       timestamp=trade.timestamp,
       price=trade.price,
-      size=trade.volume,
+      shares=trade.volume,
       buyer_exchange_order_id=trade.buyer_exchange_order_id,
       seller_exchange_order_id=trade.seller_exchange_order_id,
       exchange_trade_id=trade.trade_id
@@ -386,7 +388,7 @@ class OrderBook:
     # TODO: Optimize O(n) to O(1)
     order = self.orderid_map.get(order_id, None)
     if order is None:
-      return
+      return (None, [], [])
     if order.side == Side.BUY:
       self.total_bid_orders -= 1
       self.total_bid_volume -= order.volume
@@ -427,7 +429,7 @@ class OrderBook:
     pass
 
 
-  def __repr__(self) -> str:
+  def __str__(self) -> str:
     lines = [f"---{self.symbol}---", "Price: Orders, Volume", "---------------------"]
     i = 4
     while i >= 0:
@@ -466,7 +468,8 @@ class OrderMatchingEngine:
     for symbol_config in symbols:
       self.orderbooks[symbol_config.symbol] = OrderBook(symbol_config, self.timer, TradeIDGenerator())
 
-    self.orderid_to_ticker_map = {}
+    self.exchange_orderid_to_ticker_map = {}
+    self.orderid_to_exchange_orderid_map = {}
     self.ouch_inbound_queue = []
     self.ouch_outbound_queue = []
     self.mdf_outbound_queue = []
@@ -537,11 +540,12 @@ class OrderMatchingEngine:
     leftover_order, trade_messages, itch_msgs = ob.add_order(order)
     itch_messages.extend(itch_msgs)
     if leftover_order is not None:
-      self.orderid_to_ticker_map[leftover_order.order_id] = order_entry.ticker
+      self.orderid_to_exchange_orderid_map[order_entry.order_id] = leftover_order.order_id
+      self.exchange_orderid_to_ticker_map[leftover_order.order_id] = order_entry.ticker
       print(f"Order {leftover_order.order_id} added to orderbook with volume {leftover_order.volume} at price {leftover_order.price}") # TODO: Log
     else:
       print(f"Order {order.order_id} fully traded") # TODO: Log
-      self.orderid_to_ticker_map[order.order_id] = None
+      self.exchange_orderid_to_ticker_map[order.order_id] = None
 
     outbound_messages = []
     outbound_messages.append(accepted_order_outbound)
@@ -554,16 +558,17 @@ class OrderMatchingEngine:
     outbound_messages = []
     cancel_order = CancelOrder("", "", "", "")
     cancel_order.deserialize(order)
-    if cancel_order.order_id not in self.orderid_to_ticker_map:
+    if cancel_order.order_id not in self.orderid_to_exchange_orderid_map:
       print(f"Order ID {cancel_order.order_id} not found")
       return self.process_invalid_entry(order, 'N')
-    ticker = self.orderid_to_ticker_map.get(cancel_order.order_id, None)
+    exchange_oid = self.orderid_to_exchange_orderid_map[cancel_order.order_id]
+    ticker = self.exchange_orderid_to_ticker_map.get(exchange_oid, None)
     if ticker is None:
       print(f"Order ID {cancel_order.order_id} has been completed previously")
       return self.process_invalid_entry(order, 'C')
     ob = self.orderbooks[ticker]
-    canceled_order, ouch_messages, itch_messages = ob.cancel_order(cancel_order.order_id)
-    self.orderid_to_ticker_map[cancel_order.order_id] = None
+    canceled_order, ouch_messages, itch_messages = ob.cancel_order(exchange_oid)
+    self.exchange_orderid_to_ticker_map[cancel_order.order_id] = None
     print(f"Order {cancel_order.order_id} cancelled") # TODO: Log
 
     return [msg.serialize() for msg in ouch_messages], [msg.serialize() for msg in itch_messages]

@@ -1,8 +1,9 @@
 import zmq
 from orderclass import *
-import multiprocessing
+import multiprocessing as mp
 import time
 import sys
+import queue
 
 class TradingBot:
   def __init__(self, name: str, order_file: str, gateway_network_hostname: str):
@@ -14,7 +15,7 @@ class TradingBot:
     self.order_file = order_file
     self.gateway_network_hostname : str = gateway_network_hostname
     self.exchange_network_info = None # TODO
-    self.outbound_msgs = []
+    self.outbound_msgs = mp.Queue()
     self.inbound_msgs = []
     self.trades = []
 
@@ -23,7 +24,7 @@ class TradingBot:
 
     self.gateway_socket = None
     self.market_data_socket = None
-    self.establish_network_connections()
+
 
   def load_orders(self, order_file: str):
     with open(order_file, 'r') as f:
@@ -32,25 +33,33 @@ class TradingBot:
         if line.startswith("O"):
           parts = line.split(',')
           order = OrderEntry(parts[0], self.name, parts[1], parts[2], parts[3], int(parts[4]), int(parts[5]))
-          self.outbound_msgs.append(order)
+          self.outbound_msgs.put(order)
         elif line.startswith("C"):
           parts = line.split(',')
           cancel = CancelOrder(parts[0], self.name, parts[1], "")
-          self.outbound_msgs.append(cancel)
+          self.outbound_msgs.put(cancel)
 
 
-  def establish_network_connections(self):
+  def run(self):
+    processes = []
+    send_orders_process = mp.Process(target=self.send_orders, args=())
+    send_orders_process.start()
+    processes.append(send_orders_process)
+
+    recv_mdf_process = mp.Process(target=self.scan_market_data, args=())
+    recv_mdf_process.start()
+    processes.append(recv_mdf_process)
+
+    for process in processes:
+      process.join()
+
+
+  def send_orders(self):
     context = zmq.Context()
     self.gateway_socket = context.socket(zmq.PAIR)
     self.gateway_socket.connect(self.gateway_network_hostname)
     time.sleep(1)
 
-    # self.market_data_socket = context.socket(zmq.SUB)
-    # self.market_data_socket.connect(self.exchange_network_info.hostname_port)
-    # self.market_data_socket.setsockopt_string(zmq.SUBSCRIBE, self.exchange_network_info.topic)
-
-
-  def send_orders(self):
     def parse_message(msg: bytearray):
       msg_type = msg[0]
       if msg_type == 87:
@@ -59,32 +68,33 @@ class TradingBot:
         # print(f"Received A")
         accept_order = OrderAcceptedOutbound("", "", "", "", 0, "", 0, 0)
         accept_order.deserialize(msg)
-        print(accept_order)
+        print(f"Received OUCH Add: {accept_order}")
       elif msg_type == 67: # C
         cancel_order = OrderCanceledOutbound("", "", "", "", 0, 0, "")
         cancel_order.deserialize(msg)
-        print(cancel_order)
+        print(f"Received OUCH Cancel: {cancel_order}")
       elif msg_type == 69: # E
         executed_order = OrderExecutedOutbound("", "", "", "", 0, "", "", "", 0, 0)
         executed_order.deserialize(msg)
-        print(executed_order)
+        print(f"Received OUCH Trade: {executed_order}")
       elif msg_type == 74: # J
         rejected_order = OrderRejectedOutbound("", "", "", "", 0, "")
         rejected_order.deserialize(msg)
-        print(rejected_order)
+        print(f"Received OUCH Reject: {rejected_order}")
       else:
         print(f"Received unknown message. Msg code: {msg_type}")
 
     heartbeat_msg = bytearray([87]) + self.name.encode('ascii')
     self.gateway_socket.send(heartbeat_msg)
-    print(f"Sent heartbeat: {heartbeat_msg}")
+    # print(f"Sent heartbeat: {heartbeat_msg}")
     while True:
-      if len(self.outbound_msgs) > 0:
-        msg = self.outbound_msgs[0]
+      try:
+        msg = self.outbound_msgs.get_nowait()
         msg = msg.serialize()
         self.gateway_socket.send(msg)
-        print(f"Sent message: {msg}")
-        self.outbound_msgs.pop(0)
+        # print(f"Sent message: {msg}")
+      except queue.Empty:
+        pass
       try:
         ouch_msg = self.gateway_socket.recv(flags=zmq.NOBLOCK)
         # print(f"Received message: {ouch_msg}") # TODO: make this a separate process
@@ -94,10 +104,27 @@ class TradingBot:
       # time.sleep(0.5)
 
 
-  def scan_market_data(self):
+  def scan_market_data(self): # TODO: Finish writing this
+    context = zmq.Context()
+    socket = context.socket(zmq.SUB)
+    socket.connect("tcp://localhost:11000")
+    socket.setsockopt_string(zmq.SUBSCRIBE, "TPCF1010-BBO5")
+    time.sleep(1)
+
     try:
       while True:
-        pass
+        try:
+          msg = socket.recv(flags=zmq.NOBLOCK)
+          topic, msg = msg.split(b'@', 1)
+          # print(topic, msg)
+          bbo = MDF_BBO5("", 0, 0, 0, 0, 0, 0, 0, {}, {})
+          bbo.deserialize(msg)
+          print(f"BBO5: {bbo}")
+          # print(f"Received BBO5")
+        except zmq.error.Again:
+          # print("No message received")
+          pass
+        time.sleep(0.5)
     except KeyboardInterrupt:
       print("Exiting")
 
@@ -120,25 +147,6 @@ class TradingBot:
       print("Exiting")
 
 
-  def run(self):
-    # send_orders_process = multiprocessing.Process(target=self.send_orders)
-    # recv_ouch_process = multiprocessing.Process(target=self.read_ouch_messages)
-    # scan_market_data_process = multiprocessing.Process(target=self.scan_market_data)
-    # trade_process = multiprocessing.Process(target=self.trade)
-
-    # send_orders_process.start()
-    # recv_ouch_process.start()
-    # scan_market_data_process.start()
-    # trade_process.start()
-
-    # send_orders_process.join()
-    # recv_ouch_process.join()
-    # scan_market_data_process.join()
-    # trade_process.join()
-
-    print("Exiting")
-
-
 
 if __name__ == "__main__":
   import argparse
@@ -152,7 +160,7 @@ if __name__ == "__main__":
   bot = TradingBot(args.name, args.file, f"tcp://{args.ip}:{args.port}") # 192.168.56.10
 
   try:
-    bot.send_orders()
+    bot.run()
     time.sleep(0.05)
   except KeyboardInterrupt:
     print("Exiting")
