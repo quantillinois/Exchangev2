@@ -114,8 +114,14 @@ class ITCH_Orderbook():
     sell_order.volume -= itch_order.shares
     if buy_order.volume == 0:
       self.cancel_order(ITCH_OrderCancel("C", "", 0, buy_order.order_id, 0))
+    else:
+      self.orderbook[buy_order.price].bid_total_volume -= itch_order.shares
+      self.total_bid_volume -= itch_order.shares
     if sell_order.volume == 0:
       self.cancel_order(ITCH_OrderCancel("C", "", 0, sell_order.order_id, 0))
+    else:
+      self.orderbook[sell_order.price].ask_total_volume -= itch_order.shares
+      self.total_ask_volume -= itch_order.shares
 
 
   def __str__(self) -> str:
