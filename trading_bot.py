@@ -87,19 +87,19 @@ class TradingBot: # TODO: There is still a bug for some reason where it doesn't 
         print(f"Received W")
       elif msg_type == 65: # A
         # print(f"Received A")
-        accept_order = OrderAcceptedOutbound("", "", "", "", 0, "", 0, 0)
+        accept_order = OrderAcceptedOutbound()
         accept_order.deserialize(msg)
         print(f"Received OUCH Add: {accept_order}")
       elif msg_type == 67: # C
-        cancel_order = OrderCanceledOutbound("", "", "", "", 0, 0, "")
+        cancel_order = OrderCanceledOutbound()
         cancel_order.deserialize(msg)
         print(f"Received OUCH Cancel: {cancel_order}")
       elif msg_type == 69: # E
-        executed_order = OrderExecutedOutbound("", "", "", "", 0, "", "", "", 0, 0)
+        executed_order = OrderExecutedOutbound()
         executed_order.deserialize(msg)
         print(f"Received OUCH Trade: {executed_order}")
       elif msg_type == 74: # J
-        rejected_order = OrderRejectedOutbound("", "", "", "", 0, "")
+        rejected_order = OrderRejectedOutbound()
         rejected_order.deserialize(msg)
         print(f"Received OUCH Reject: {rejected_order}")
       else:
@@ -130,15 +130,15 @@ class TradingBot: # TODO: There is still a bug for some reason where it doesn't 
       msg_type = msg[0]
       match msg_type:
         case 65: # A
-          add_order = ITCH_AddOrder("", "", 0, "", "", 0, 0)
+          add_order = ITCH_AddOrder()
           add_order.deserialize(msg)
           return add_order
         case 67: # C
-          cancel_order = ITCH_OrderCancel("", "", 0, "", 0)
+          cancel_order = ITCH_OrderCancel()
           cancel_order.deserialize(msg)
           return cancel_order
         case 69: # E
-          trade = ITCH_Trade("", 0, 0, 0, 0, "", "", "")
+          trade = ITCH_Trade()
           trade.deserialize(msg)
           return trade
         case _:
