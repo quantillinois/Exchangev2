@@ -13,14 +13,14 @@ class TickerplantInfo:
   topics: list[str]
 
 @dataclass # TODO: Refactor
-class ExchangeInfo:
+class GatewayInfo:
   ip_addr: str
   port: int
 
 
 
 class TradingBot: # TODO: There is still a bug for some reason where it doesn't receive the messages from the exchange after you run a second bot and after the second bot is done sending orders
-  def __init__(self, name: str, order_file: str, exchange_network_info: ExchangeInfo, tickerplant_info: TickerplantInfo):
+  def __init__(self, name: str, order_file: str, exchange_network_info: GatewayInfo, tickerplant_info: TickerplantInfo):
     self.name = name
     if len(self.name) > 10:
       self.name = self.name[:10]
@@ -75,10 +75,10 @@ class TradingBot: # TODO: There is still a bug for some reason where it doesn't 
       process.join()
 
 
-  def send_orders(self, exchange_ip_addr : str, exchange_port : int):
+  def send_orders(self, gateway_ip_addr : str, gateway_port : int):
     context = zmq.Context()
     socket = context.socket(zmq.PAIR)
-    socket.connect(f"tcp://{exchange_ip_addr}:{exchange_port}")
+    socket.connect(f"tcp://{gateway_ip_addr}:{gateway_port}")
     time.sleep(1)
 
     def parse_message(msg: bytearray):
@@ -120,7 +120,7 @@ class TradingBot: # TODO: There is still a bug for some reason where it doesn't 
         ouch_msg = socket.recv(flags=zmq.NOBLOCK)
         # print(f"Received message: {ouch_msg}") # TODO: make this a separate process
         parse_message(ouch_msg)
-      except zmq.error.Again:
+      except zmq.error.Again or KeyboardInterrupt:
         pass
       # time.sleep(0.5)
 
@@ -137,7 +137,7 @@ class TradingBot: # TODO: There is still a bug for some reason where it doesn't 
           cancel_order = ITCH_OrderCancel()
           cancel_order.deserialize(msg)
           return cancel_order
-        case 69: # E
+        case 84: # T
           trade = ITCH_Trade()
           trade.deserialize(msg)
           return trade
@@ -157,11 +157,11 @@ class TradingBot: # TODO: There is still a bug for some reason where it doesn't 
       while True:
         try:
           raw_msg = socket.recv(flags=zmq.NOBLOCK)
-          print(raw_msg)
-          print(raw_msg.split(b'@', 1))
+          # print(raw_msg)
+          # print(raw_msg.split(b'@', 1))
           topic, msg = raw_msg.split(b'@', 1)
-          print("Received message: ", topic, msg)
-          print(msg.split(b'@', 1))
+          # print("Received message: ", topic, msg)
+          # print(msg.split(b'@', 1))
           ticker, topic_type = topic.decode().split('-')
           match topic_type:
             case "BBO5":
@@ -204,10 +204,10 @@ if __name__ == "__main__":
   parser.add_argument("--file", type=str, help="File containing orders", default="orders.txt")
 
   args = parser.parse_args()
-  exchange_info = ExchangeInfo("localhost", 2001)
+  gateway_info = GatewayInfo("localhost", args.port)
   tickerplant_info = TickerplantInfo("localhost", 11000, ["TPCF1010-BBO5", "TPCF1010-ITCH", "GEN-TPC"])
 
-  bot = TradingBot(args.name, args.file, exchange_info, tickerplant_info) # 192.168.56.10
+  bot = TradingBot(args.name, args.file, gateway_info, tickerplant_info) # 192.168.56.10
 
   try:
     bot.run()
