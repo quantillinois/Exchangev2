@@ -87,25 +87,25 @@ class CancelOrder:
 
 @dataclass
 class TickerConfiguration:
-  symbol: str
-  min_price: int
-  max_price: int
-  lot_size: int
-  decimals: int
-  settlement: str
-  multiplier: int
+  symbol: str = ""
+  min_price: int = 0
+  max_price: int = 0
+  lot_size: int = 0
+  decimals: int = 0
+  settlement: str = ""
+  multiplier: int = 0
 
 ### OUCH Outbound messages ###
 @dataclass
 class OrderAcceptedOutbound:
-  order_type: str # A
-  mpid: str
-  order_id: str
-  ticker: str
-  timestamp: int
-  side: str
-  price: int
-  size: int
+  order_type: str = "A"
+  mpid: str = ""
+  order_id: str = ""
+  ticker: str = ""
+  timestamp: int = 0
+  side: str = ""
+  price: int = 0
+  size: int = 0
 
   def serialize(self):
     arr = bytearray()
@@ -145,13 +145,13 @@ class OrderAcceptedOutbound:
 
 @dataclass
 class OrderCanceledOutbound:
-  order_type: str # C
-  mpid: str
-  order_id: str
-  ticker: str
-  timestamp: int
-  decremented_shares: int
-  reason: str
+  order_type: str = "C"
+  mpid: str = ""
+  order_id: str = ""
+  ticker: str = ""
+  timestamp: int = 0
+  decremented_shares: int = 0
+  reason: str = ""
   # U - User requested cancel
 
   def serialize(self) -> bytearray:
@@ -189,12 +189,12 @@ class OrderCanceledOutbound:
 
 @dataclass
 class OrderRejectedOutbound:
-  order_type: str #J
-  mpid: str
-  order_id: str
-  ticker: str
-  timestamp: int
-  reason: str
+  order_type: str = "J"
+  mpid: str = ""
+  order_id: str = ""
+  ticker: str = ""
+  timestamp: int = 0
+  reason: str = ""
   # I - Invalid order (first char not found)
   # N - Orderid does not exist
   # C - Orderid has already been canceled
@@ -232,16 +232,16 @@ class OrderRejectedOutbound:
 
 @dataclass
 class OrderExecutedOutbound:
-  order_type: str
-  mpid: str
-  order_id: str
-  ticker: str
-  timestamp: int
-  buyer_mpid: str
-  seller_mpid: str
-  trade_id: str
-  price: int
-  size: int
+  order_type: str = "E"
+  mpid: str = ""
+  order_id: str = ""
+  ticker: str = ""
+  timestamp: int = 0
+  buyer_mpid: str = ""
+  seller_mpid: str = ""
+  trade_id: str = ""
+  price: int = 0
+  size: int = 0
 
   def serialize(self) -> bytearray:
     arr = bytearray()
@@ -303,14 +303,14 @@ class OrderExecutedOutbound:
 
 @dataclass
 class ITCH_Trade:
-  order_type: str # T
-  ticker: str
-  timestamp: int
-  price: int
-  shares: int
-  buyer_exchange_order_id: str
-  seller_exchange_order_id: str
-  exchange_trade_id: str
+  order_type: str = "T"
+  ticker: str = ""
+  timestamp: int = 0
+  price: int = 0
+  shares: int = 0
+  buyer_exchange_order_id: str = ""
+  seller_exchange_order_id: str = ""
+  exchange_trade_id: str = ""
 
   def serialize(self) -> bytearray:
     arr = bytearray()
@@ -349,13 +349,13 @@ class ITCH_Trade:
 
 @dataclass
 class ITCH_AddOrder:
-  order_type: str # A
-  ticker: str
-  timestamp: int
-  exchange_order_id: str
-  side: str
-  price: int
-  shares: int
+  order_type: str = "A"
+  ticker: str = ""
+  timestamp: int = 0
+  exchange_order_id: str = ""
+  side: str = ""
+  price: int = 0
+  shares: int = 0
 
   def serialize(self) -> bytearray:
     arr = bytearray()
@@ -387,11 +387,11 @@ class ITCH_AddOrder:
 
 @dataclass
 class ITCH_OrderCancel:
-  order_type: str # C
-  ticker: str
-  timestamp: int
-  exchange_order_id: str
-  canceled_shares: int
+  order_type: str = "C"
+  ticker: str = ""
+  timestamp: int = 0
+  exchange_order_id: str = ""
+  canceled_shares: int = 0
 
   def serialize(self) -> bytearray:
     arr = bytearray()
@@ -420,16 +420,16 @@ class ITCH_OrderCancel:
 
 @dataclass
 class MDF_BBO5:
-  ticker: str
-  timestamp: int
-  best_bid_price: int
-  best_ask_price: int
-  best_bid_volume: int
-  best_ask_volume: int
-  total_bid_volume: int
-  total_ask_volume: int
-  top5_bids: dict[int, int] # price to volume, in descending order
-  top5_asks: dict[int, int] # price to volume, in ascending order
+  ticker: str = ""
+  timestamp: int = 0
+  best_bid_price: int = 0
+  best_ask_price: int = 0
+  best_bid_volume: int = 0
+  best_ask_volume: int = 0
+  total_bid_volume: int = 0
+  total_ask_volume: int = 0
+  top5_bids: dict[int, int] = {} # price to volume, in descending order
+  top5_asks: dict[int, int] = {} # price to volume, in ascending order
 
   def serialize(self) -> bytearray:
     arr = bytearray()
