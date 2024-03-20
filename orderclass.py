@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 # import bytearray
 
 # Header
@@ -428,8 +428,8 @@ class MDF_BBO5:
   best_ask_volume: int = 0
   total_bid_volume: int = 0
   total_ask_volume: int = 0
-  top5_bids: dict[int, int] = {} # price to volume, in descending order
-  top5_asks: dict[int, int] = {} # price to volume, in ascending order
+  top5_bids: dict[int, int] = field(default_factory=dict) # price to volume, in descending order
+  top5_asks: dict[int, int] = field(default_factory=dict) # price to volume, in ascending order
 
   def serialize(self) -> bytearray:
     arr = bytearray()
