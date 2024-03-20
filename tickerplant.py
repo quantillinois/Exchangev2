@@ -37,17 +37,17 @@ class ITCH_Orderbook():
     match msg_type:
       case 65: # A
         # print(f"Received A")
-        add_order = ITCH_AddOrder("", "", 0, "", "", 0, 0)
+        add_order = ITCH_AddOrder()
         add_order.deserialize(msg)
         self.add_order(add_order)
       case 67: # C
         # print(f"Received C")
-        cancel_order = ITCH_OrderCancel("", "", 0, "", 0)
+        cancel_order = ITCH_OrderCancel()
         cancel_order.deserialize(msg)
         self.cancel_order(cancel_order)
       case 84: # T
         # print(f"Received T")
-        trade_order = ITCH_Trade("", "", 0, 0, 0, "", "", "")
+        trade_order = ITCH_Trade()
         trade_order.deserialize(msg)
         self.trade_order(trade_order)
       case _:
@@ -102,26 +102,29 @@ class ITCH_Orderbook():
 
   def trade_order(self, itch_order: ITCH_Trade):
     buy_order = self.orderid_map.get(itch_order.buyer_exchange_order_id, None)
-    if buy_order is None:
-      print(f"Order ID {itch_order.buyer_exchange_order_id} not found")
-      return
     sell_order = self.orderid_map.get(itch_order.seller_exchange_order_id, None)
-    if sell_order is None:
-      print(f"Order ID {itch_order.seller_exchange_order_id} not found")
+    if buy_order is None and sell_order is None:
+      if buy_order is None:
+        print(f"Order ID {itch_order.buyer_exchange_order_id} not found")
+      if sell_order is None:
+        print(f"Order ID {itch_order.seller_exchange_order_id} not found")
       return
 
-    buy_order.volume -= itch_order.shares
-    sell_order.volume -= itch_order.shares
-    if buy_order.volume == 0:
-      self.cancel_order(ITCH_OrderCancel("C", "", 0, buy_order.order_id, 0))
-    else:
-      self.orderbook[buy_order.price].bid_total_volume -= itch_order.shares
-      self.total_bid_volume -= itch_order.shares
-    if sell_order.volume == 0:
-      self.cancel_order(ITCH_OrderCancel("C", "", 0, sell_order.order_id, 0))
-    else:
-      self.orderbook[sell_order.price].ask_total_volume -= itch_order.shares
-      self.total_ask_volume -= itch_order.shares
+    # TODO only parse for whichever one is on the books
+    if buy_order is not None:
+      if buy_order.volume - itch_order.shares == 0:
+        self.cancel_order(ITCH_OrderCancel("C", "", 0, buy_order.order_id, 0))
+      else:
+        buy_order.volume -= itch_order.shares
+        self.orderbook[buy_order.price].bid_total_volume -= itch_order.shares
+        self.total_bid_volume -= itch_order.shares
+    elif sell_order is not None:
+      if sell_order.volume - itch_order.shares == 0:
+        self.cancel_order(ITCH_OrderCancel("C", "", 0, sell_order.order_id, 0))
+      else:
+        sell_order.volume -= itch_order.shares
+        self.orderbook[sell_order.price].ask_total_volume -= itch_order.shares
+        self.total_ask_volume -= itch_order.shares
 
 
   def __str__(self) -> str:
