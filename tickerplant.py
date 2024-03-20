@@ -159,7 +159,7 @@ class Tickerplant():
       self.ticker_info_map[ticker_info.symbol] = ticker_info
       self.orderbooks[ticker_info.symbol] = ITCH_Orderbook(ticker_info)
 
-    self.outbound_messages : mp.Queue[tuple] = mp.Queue() # Topic, msg
+    self.outbound_messages : mp.Queue[tuple[str, bytearray]] = mp.Queue() # Topic, msg
     self.run()
 
   def run(self):
@@ -173,10 +173,10 @@ class Tickerplant():
 
     print("Starting generator connection")
     for generator_info in self.generator_infos:
-      for topic in generator_info.topics:
-        process = mp.Process(target=self.generator_daemon, args=(generator_info.ip_addr, generator_info.port, topic))
-        process.start()
-        processes.append(process)
+      # for topic in generator_info.topics:
+      process = mp.Process(target=self.generator_daemon, args=(generator_info.ip_addr, generator_info.port, generator_info.topics))
+      process.start()
+      processes.append(process)
 
     print("Starting tickerplant")
     process = mp.Process(target=self.tickerplant_daemon, args=(self.port,))
@@ -302,18 +302,19 @@ class Tickerplant():
       print("Exiting")
 
 
-  def generator_daemon(self, ip_addr: str, port: int, topic: str):
+  def generator_daemon(self, ip_addr: str, port: int, topics: str):
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
     socket.connect(f"tcp://{ip_addr}:{port}")
-    if topic is not None:
+    for topic in topics:
       socket.setsockopt_string(zmq.SUBSCRIBE, topic)
 
     try:
       while True:
         try:
-          msg = socket.recv_string(flags=zmq.NOBLOCK)
-          print(f"{msg}")
+          msg = socket.recv(flags=zmq.NOBLOCK)
+          topic, msg = msg.split(b"@", 1)
+          self.outbound_messages.put((topic.decode(), msg))
         except zmq.error.Again:
           # print("No message received")
           pass
@@ -340,6 +341,6 @@ if __name__ == "__main__":
   #   print("Exiting")
 
   exchange_info = ExchangeInfo("localhost", 10001, ["MDF-OME1", "BBO5-OME1"])
-  gen_info = GeneratorInfo("localhost", 7000, ["TPC"])
+  gen_info = GeneratorInfo("localhost", 7000, ["GEN-TPC"])
   tpcf1010_info = TickerConfiguration("TPCF1010", 1, 200, 1, 2, "cash", 1)
   tp = Tickerplant(11000, [exchange_info], [gen_info], [tpcf1010_info], Timer())

@@ -5,6 +5,7 @@ import time
 import sys
 import queue
 from dataclasses import dataclass
+from generator import TenPokerCardSample
 @dataclass
 class TickerplantInfo:
   ip_addr: str
@@ -16,7 +17,9 @@ class ExchangeInfo:
   ip_addr: str
   port: int
 
-class TradingBot:
+
+
+class TradingBot: # TODO: There is still a bug for some reason where it doesn't receive the messages from the exchange after you run a second bot and after the second bot is done sending orders
   def __init__(self, name: str, order_file: str, exchange_network_info: ExchangeInfo, tickerplant_info: TickerplantInfo):
     self.name = name
     if len(self.name) > 10:
@@ -34,8 +37,10 @@ class TradingBot:
     if order_file is not None:
       self.load_orders(order_file)
 
-    self.gateway_socket = None
-    self.market_data_socket = None
+    self.topic_queues : dict[str, mp.Queue] = {topic.encode(): mp.Queue() for topic in tickerplant_info.topics}
+
+    # self.gateway_socket = None
+    # self.market_data_socket = None
 
 
   def load_orders(self, order_file: str):
@@ -72,8 +77,8 @@ class TradingBot:
 
   def send_orders(self, exchange_ip_addr : str, exchange_port : int):
     context = zmq.Context()
-    self.gateway_socket = context.socket(zmq.PAIR)
-    self.gateway_socket.connect(f"tcp://{exchange_ip_addr}:{exchange_port}")
+    socket = context.socket(zmq.PAIR)
+    socket.connect(f"tcp://{exchange_ip_addr}:{exchange_port}")
     time.sleep(1)
 
     def parse_message(msg: bytearray):
@@ -101,18 +106,18 @@ class TradingBot:
         print(f"Received unknown message. Msg code: {msg_type}")
 
     heartbeat_msg = bytearray([87]) + self.name.encode('ascii')
-    self.gateway_socket.send(heartbeat_msg)
+    socket.send(heartbeat_msg)
     # print(f"Sent heartbeat: {heartbeat_msg}")
     while True:
       try:
         msg = self.outbound_msgs.get_nowait()
         msg = msg.serialize()
-        self.gateway_socket.send(msg)
+        socket.send(msg)
         # print(f"Sent message: {msg}")
       except queue.Empty:
         pass
       try:
-        ouch_msg = self.gateway_socket.recv(flags=zmq.NOBLOCK)
+        ouch_msg = socket.recv(flags=zmq.NOBLOCK)
         # print(f"Received message: {ouch_msg}") # TODO: make this a separate process
         parse_message(ouch_msg)
       except zmq.error.Again:
@@ -151,21 +156,32 @@ class TradingBot:
     try:
       while True:
         try:
-          msg = socket.recv(flags=zmq.NOBLOCK)
-          topic, msg = msg.split(b'@', 1)
+          raw_msg = socket.recv(flags=zmq.NOBLOCK)
+          print(raw_msg)
+          print(raw_msg.split(b'@', 1))
+          topic, msg = raw_msg.split(b'@', 1)
+          print("Received message: ", topic, msg)
+          print(msg.split(b'@', 1))
           ticker, topic_type = topic.decode().split('-')
           match topic_type:
             case "BBO5":
               bbo = MDF_BBO5("", 0, 0, 0, 0, 0, 0, 0, {}, {})
               bbo.deserialize(msg)
               print(f"{topic}: {bbo}")
+              self.topic_queues[topic].put(bbo)
             case "ITCH":
               itch_order = parse_itch(msg)
               print(f"{topic}: {itch_order}")
+              self.topic_queues[topic].put(itch_order)
+            case "TPC":
+              print(msg)
+              tpc_sample = TenPokerCardSample()
+              tpc_sample.deserialize(msg)
+              print(f"{topic}: {tpc_sample}")
+              self.topic_queues[topic].put(tpc_sample)
         except zmq.error.Again:
-          # print("No message received")
           pass
-        time.sleep(0.005)
+        time.sleep(0.050)
     except KeyboardInterrupt:
       print("Exiting")
 
@@ -189,7 +205,7 @@ if __name__ == "__main__":
 
   args = parser.parse_args()
   exchange_info = ExchangeInfo("localhost", 2001)
-  tickerplant_info = TickerplantInfo("localhost", 11000, ["TPCF1010-BBO5", "TPCF1010-ITCH"])
+  tickerplant_info = TickerplantInfo("localhost", 11000, ["TPCF1010-BBO5", "TPCF1010-ITCH", "GEN-TPC"])
 
   bot = TradingBot(args.name, args.file, exchange_info, tickerplant_info) # 192.168.56.10
 

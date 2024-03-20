@@ -1,6 +1,7 @@
 from enum import Enum
 import random
 import zmq
+from dataclasses import dataclass
 
 class CardSuit(Enum):
   HEARTS = 1
@@ -24,9 +25,34 @@ class CardValue(Enum):
   KING = 13
 
 
+@dataclass
+class TenPokerCardSample:
+  round_num : int = 0
+  turn_num : int = 0
+  sampled_card : int = 0
+  total_round_sum : int = 0
+
+  def serialize(self) -> bytearray:
+    arr = bytearray()
+    print(f"Serializing: {self.round_num}, {self.turn_num}, {self.sampled_card}, {self.total_round_sum}")
+    arr.extend(self.round_num.to_bytes(4, 'big'))
+    arr.extend(self.turn_num.to_bytes(4, 'big'))
+    arr.extend(self.sampled_card.to_bytes(4, 'big'))
+    arr.extend(self.total_round_sum.to_bytes(4, 'big'))
+    print(f"Serialized: {arr}")
+    return arr
+
+  def deserialize(self, msg: bytearray):
+    print(f"Deserializing: {msg}")
+    self.round_num = int.from_bytes(msg[0:4], 'big')
+    self.turn_num = int.from_bytes(msg[4:8], 'big')
+    self.sampled_card = int.from_bytes(msg[8:12], 'big')
+    self.total_round_sum = int.from_bytes(msg[12:16], 'big')
+    print(f"Deserialized: {self.round_num}, {self.turn_num}, {self.sampled_card}, {self.total_round_sum}")
+
 class Sampler:
   def __init__(self):
-    self.round_num = 0
+    self.round_num : int = 0
 
   def sample(self):
     pass
@@ -71,7 +97,8 @@ class TenPokerCardSampler(Sampler):
     if len(self.sampled_cards) == 10:
       self.history.append(self.sampled_cards)
 
-    return card[0].value
+    sample = TenPokerCardSample(self.round_num, len(self.sampled_cards), card[0].value, self.total_value)
+    return sample
 
   def get_turn_num(self):
     return len(self.sampled_cards)
@@ -100,13 +127,21 @@ class UnderlyingProcessGenerator:
     self.socket.bind(f"tcp://*:{socket}")
     time.sleep(1)
 
+  def run_rounds(self, num_rounds: int):
+    for i in range(num_rounds):
+      self.next_turn()
+      time.sleep(self.delay)
+
   def next_turn(self):
     sample = self.sampler.sample()
-    t = self.sampler.get_turn_num()
-    r = self.sampler.get_round_num()
-    tv = self.sampler.get_total_value()
-    print(f"{self.sampler.topic} {t},{r},{sample},{tv}")
-    self.socket.send_string(f"{self.sampler.topic} {t},{r},{sample},{tv}") # Space is needed to separate topic from message
+    print(f"Sampled: {sample}")
+    data = bytearray()
+    data.extend(f"GEN-{self.sampler.topic}".encode())
+    data.extend(b'@')
+    data.extend(sample.serialize())
+    # self.socket.send_string(f"GEN-{self.sampler.topic}@{t},{r},{sample},{tv}") # Space is needed to separate topic from message
+    print(f"Sending message: {data}")
+    self.socket.send(data)
     return sample
 
 
@@ -116,13 +151,6 @@ if __name__ == "__main__":
   generator = UnderlyingProcessGenerator(sampler)
 
   try:
-    r = generator.sampler.get_round_num()
-    while r < 1:
-      card = generator.next_turn()
-      t = generator.sampler.get_turn_num()
-      print(f"Generated card (T: {t}, R: {r}): {card}")
-      print(f"Total Value: {generator.sampler.get_total_value()}")
-      r = generator.sampler.get_round_num()
-      time.sleep(1)
+    generator.run_rounds(10)
   except KeyboardInterrupt:
     print("Exiting")
