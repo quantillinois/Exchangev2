@@ -303,8 +303,8 @@ class OrderBook:
         if order.price > self.best_bid:
           self.best_bid = order.price
         leftover_order = order
-        # itch_add_order = ITCH_AddOrder("A", order.symbol, order.timestamp, order.order_id, "B" if order.side == Side.BUY else "S", order.price, order.volume)
-        # itch_executed_outbound_msgs.append(itch_add_order)
+        itch_add_order = ITCH_AddOrder("A", order.symbol, order.timestamp, order.order_id, "B" if order.side == Side.BUY else "S", order.price, order.volume)
+        itch_executed_outbound_msgs.append(itch_add_order)
 
     elif order.side == Side.SELL:
       while order.price <= self.best_bid and order.volume > 0:
@@ -372,8 +372,8 @@ class OrderBook:
         if order.price < self.best_ask:
           self.best_ask = order.price
         leftover_order = order
-        # itch_add_order = ITCH_AddOrder("A", order.symbol, order.timestamp, order.order_id, "B" if order.side == Side.BUY else "S", order.price, order.volume)
-        # itch_executed_outbound_msgs.append(itch_add_order)
+        itch_add_order = ITCH_AddOrder("A", order.symbol, order.timestamp, order.order_id, "B" if order.side == Side.BUY else "S", order.price, order.volume)
+        itch_executed_outbound_msgs.append(itch_add_order)
 
     if self.total_ask_orders == 0:
       self.best_ask = self.max_price
@@ -535,7 +535,7 @@ class OrderMatchingEngine:
     # TODO: Check if order_entry is valid?
     accepted_order_outbound = OrderAcceptedOutbound("A", order_entry.mpid, order_entry.order_id, order_entry.ticker, self.timer.get_time(), order_entry.side, order_entry.price, order_entry.size)
     order = Order(self.exchange_order_id_generator.generate_trade_id(), order_entry.ticker, order_entry.price, order_entry.size, order_entry.mpid, order_entry.order_id, self.timer.get_time(), order_entry.side)
-    itch_messages.extend(itch_order_from_order_accept(order))
+    # itch_messages.extend(itch_order_from_order_accept(order))
     ob = self.orderbooks[order_entry.ticker]
     leftover_order, trade_messages, itch_msgs = ob.add_order(order)
     itch_messages.extend(itch_msgs)
